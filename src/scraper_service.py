@@ -134,34 +134,62 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
     except Exception as e:
         Actor.log.debug(f'Error extracting breadcrumbs: {e}')
     
-    # Extract description
+    # Extract description - get ALL paragraphs that form the complete description
     description = None
     description_english = None
     try:
         paragraphs = soup.find_all('p')
-        desc_candidates = []
+        
+        # Collect all valid description paragraphs
+        czech_paragraphs = []
+        english_paragraphs = []
         
         for p in paragraphs:
             try:
                 text = clean_text(p.get_text())
-                if text and len(text) > 100 and len(text) < 2000:
-                    if not any(skip in text.lower() for skip in 
-                             ['cookies', 'soukromí', 'podmínky', '© 20', 'seznam.cz']):
-                        desc_candidates.append(text)
-            except:
+                
+                # Skip if too short or contains footer/legal content
+                if not text or len(text) < 50:
+                    continue
+                    
+                # Filter out non-description content
+                skip_keywords = [
+                    'cookies', 'soukromí', 'podmínky', '© 20', 'seznam.cz',
+                    'všechna práva', 'jakékoliv užití', 'odmítnout vše',
+                    'přijmout vše', 'nastavit', 'consent', 'details',
+                    'personalizovaná reklama', 'měření výkonu reklamy'
+                ]
+                
+                if any(skip in text.lower() for skip in skip_keywords):
+                    continue
+                
+                # Detect if it's English (starts with common English phrases)
+                is_english = any(eng in text[:80] for eng in [
+                    'I am offering', 'The apartment', 'The property', 'The flat',
+                    'For sale', 'For rent', 'Located in', 'This property'
+                ])
+                
+                if is_english:
+                    english_paragraphs.append(text)
+                else:
+                    # It's Czech description
+                    czech_paragraphs.append(text)
+                    
+            except Exception as e:
+                Actor.log.debug(f'Error processing paragraph: {e}')
                 continue
         
-        if desc_candidates:
-            description = max(desc_candidates, key=len)
-            Actor.log.info(f'Found description: {len(description)} characters')
+        # Combine Czech paragraphs into full description
+        if czech_paragraphs:
+            # Join all paragraphs with double newline for readability
+            description = '\n\n'.join(czech_paragraphs)
+            Actor.log.info(f'Found description: {len(description)} characters ({len(czech_paragraphs)} paragraphs)')
+        
+        # Combine English paragraphs if available
+        if english_paragraphs:
+            description_english = '\n\n'.join(english_paragraphs)
+            Actor.log.info(f'Found English description: {len(description_english)} characters ({len(english_paragraphs)} paragraphs)')
             
-            # Try to find English translation
-            if len(desc_candidates) > 1:
-                for desc in desc_candidates:
-                    if any(eng in desc[:50] for eng in ['I am', 'The apartment', 'The property']):
-                        description_english = desc
-                        Actor.log.info('Found English description')
-                        break
     except Exception as e:
         Actor.log.debug(f'Error extracting description: {e}')
     

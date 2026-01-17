@@ -12,7 +12,7 @@ This Apify Actor scrapes detailed property information from Bezrealitky.cz listi
   - ✅ **Disposition** (3+kk, 2+1, 4+1, etc.)
   
 - **Comprehensive Data Extraction**: Scrapes 30+ data points including:
-  - Property details (ID, title, description in Czech & English, category)
+  - Property details (ID, title, **full multi-paragraph descriptions** in Czech & English, category)
   - Pricing (total price, price per m²)
   - Location (hierarchical structure with city, district, street)
   - Property specifications (area, disposition, floor, building type, condition, energy rating)
@@ -150,8 +150,8 @@ apify push
 - **Property ID**: Unique listing identifier
 - **Title**: Full property title
 - **Category**: Prodej (Sale) or Pronájem (Rental)
-- **Description**: Full Czech description
-- **Description (English)**: English translation if available
+- **Description**: Complete multi-paragraph Czech description including property details, neighborhood info, room layouts, costs, and amenities
+- **Description (English)**: Full English translation if available (all paragraphs combined)
 - **URL**: Original listing URL
 
 ### Pricing
