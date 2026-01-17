@@ -355,10 +355,11 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
                             'priceChangePercent': district_info.price_change_percent,
                             'priceCategory': district_info.price_category,
                             'crimeStats': {
-                                'violentCrimes': district_info.crime_nasilna,
-                                'burglaries': district_info.crime_kradeze_vloupanim,
-                                'fires': district_info.crime_pozary
-                            }
+                                'violentCrimes': district_info.crime_nasilna_normalized,
+                                'burglaries': district_info.crime_kradeze_vloupanim_normalized,
+                                'fires': district_info.crime_pozary_normalized
+                            },
+                            'kebabIndex': district_info.kebab_index_normalized,
                         }
                         Actor.log.info(f'✓ Added district statistics: Avg price {district_stats["avgPricePerSqmCzk"]} Kč/m², Crime: {district_stats["crimeStats"]["violentCrimes"]} violent')
                 except (ValueError, AttributeError, KeyError) as e:
