@@ -45,6 +45,12 @@
       "description": "Skip web scraping and only test LLM functionality with sample data",
       "default": false
     },
+    "outputMockInconsistencies": {
+      "title": "Output Mock Inconsistency Results",
+      "type": "boolean",
+      "description": "Generate and output mock inconsistency check results (ConsistencyCheckResult objects) for testing",
+      "default": false
+    },
     "useLLM": {
       "title": "Use LLM Analysis",
       "type": "boolean",
