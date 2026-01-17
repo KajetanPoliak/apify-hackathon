@@ -146,14 +146,18 @@ async def call_openrouter_llm(
         if response_format:
             Actor.log.debug(f"Response format: {json.dumps(response_format, indent=2)}")
         
-        # Initialize OpenAI client
+        # Initialize OpenAI client with longer timeout for LLM calls
+        # LLM calls can take 10-30+ seconds, especially with structured outputs
+        # Using a tuple for (connect timeout, read timeout, write timeout, pool timeout)
+        # Default OpenAI timeout is 5 minutes, but we'll use 60 seconds for read timeout
         client = AsyncOpenAI(
             base_url="https://openrouter.apify.actor/api/v1",
             api_key="no-key-required-but-must-not-be-empty",
             default_headers={
                 "Authorization": f"Bearer {apify_token}",
             },
-            timeout=5.0,
+            timeout=60.0,  # 60 second timeout for read operations (LLM responses can be slow)
+            max_retries=3,  # Allow up to 3 retries on transient failures
         )
         
         # Prepare request parameters
@@ -168,7 +172,16 @@ async def call_openrouter_llm(
             request_params["response_format"] = response_format
         
         # Call the LLM using OpenAI chat completions API
-        completion = await client.chat.completions.create(**request_params)
+        # The OpenAI client will automatically retry on transient failures
+        # with exponential backoff (handled by the client library)
+        try:
+            completion = await client.chat.completions.create(**request_params)
+        except Exception as e:
+            # Log the error with context
+            Actor.log.warning(f"LLM API call failed: {type(e).__name__}: {e}")
+            Actor.log.debug(f"Failed request params: model={model}, messages_count={len(messages)}")
+            # Re-raise to let the outer try-except handle it
+            raise
         
         # Log response summary
         Actor.log.debug("=" * 80)
@@ -218,7 +231,28 @@ async def call_openrouter_llm(
         return result
             
     except Exception as e:
-        Actor.log.exception(f"Error calling OpenRouter actor: {e}")
+        # Log different error types with appropriate detail
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        if "timeout" in error_msg.lower() or "Timeout" in error_type:
+            Actor.log.warning(
+                "LLM request timed out after 60 seconds. "
+                "This may indicate a slow API response or network issue. "
+                "The OpenAI client automatically retries with exponential backoff."
+            )
+        elif "rate" in error_msg.lower() or "RateLimit" in error_type:
+            Actor.log.warning(
+                "Rate limit exceeded. "
+                "The OpenAI client will automatically retry with exponential backoff."
+            )
+        elif "retry" in error_msg.lower() or "Retry" in error_type:
+            Actor.log.info(
+                "LLM request is being retried (this is normal for transient failures). "
+                "The OpenAI client handles retries automatically."
+            )
+        else:
+            Actor.log.exception(f"Error calling OpenRouter actor: {e}")
         return None
 
 
@@ -400,7 +434,7 @@ def extract_content_from_llm_response(llm_result: dict[str, Any]) -> str | None:
 
 
 def parse_json_content(content: str | Any) -> dict[str, Any] | None:
-    """Parse JSON content from LLM response.
+    """Parse JSON content from LLM response, with handling for truncated JSON.
     
     Args:
         content: Content string or already parsed dict
@@ -411,8 +445,42 @@ def parse_json_content(content: str | Any) -> dict[str, Any] | None:
     if isinstance(content, str):
         try:
             return json.loads(content)
-        except json.JSONDecodeError:
-            Actor.log.warning(f"Failed to parse JSON from LLM response: {content[:200]}")
+        except json.JSONDecodeError as e:
+            Actor.log.warning(f"Failed to parse JSON from LLM response: {e}")
+            Actor.log.debug(f"Content length: {len(content)}")
+            
+            # Check if JSON appears truncated
+            if '"findings"' in content:
+                findings_pos = content.find('"findings"')
+                after_findings = content[findings_pos:]
+                # Check if findings array is incomplete
+                if after_findings.count('[') > after_findings.count(']'):
+                    Actor.log.warning("JSON appears truncated - findings array is incomplete")
+                    # Try to fix by closing the JSON structure
+                    try:
+                        # Find the last complete finding and close the structure
+                        last_complete_brace = content.rfind('}')
+                        if last_complete_brace > 0:
+                            # Try to reconstruct a minimal valid JSON
+                            fixed_content = content[:last_complete_brace + 1]
+                            # Add closing brackets for incomplete structures
+                            open_braces = fixed_content.count('{') - fixed_content.count('}')
+                            open_brackets = fixed_content.count('[') - fixed_content.count(']')
+                            fixed_content += ']' * open_brackets + '}' * open_braces
+                            Actor.log.info("Attempting to fix truncated JSON...")
+                            try:
+                                return json.loads(fixed_content)
+                            except json.JSONDecodeError:
+                                pass
+                    except Exception:
+                        pass
+            
+            # Log content for debugging
+            if len(content) > 1000:
+                Actor.log.debug(f"First 500 chars: {content[:500]}")
+                Actor.log.debug(f"Last 500 chars: {content[-500:]}")
+            else:
+                Actor.log.debug(f"Full content: {content}")
             return None
     else:
         return content
@@ -674,36 +742,62 @@ async def check_consistency_with_structured_output(
     Returns:
         ConsistencyCheckResult object, or None on error
     """
-    # Build prompt for consistency checking
-    prompt = f"""Check this real estate listing for internal consistency between the description and structured data.
+    # Build simplified prompt for consistency checking
+    # Format listing data as JSON for clarity
+    listing_summary = {
+        "listing_id": listing_input.listing_id,
+        "address": listing_input.property_address,
+        "bedrooms": listing_input.bedrooms,
+        "bathrooms": listing_input.bathrooms,
+        "square_meters": listing_input.square_meters,
+        "list_price": listing_input.list_price,
+        "property_type": listing_input.property_type,
+        "year_built": listing_input.year_built,
+        "has_pool": listing_input.has_pool,
+        "has_garage": listing_input.has_garage,
+        "has_basement": listing_input.has_basement,
+        "has_fireplace": listing_input.has_fireplace,
+    }
+    
+    prompt = f"""Analyze this real estate listing for inconsistencies between the description and structured data.
 
-Listing Data:
-- Listing ID: {listing_input.listing_id}
-- Address: {listing_input.property_address}
-- City: {listing_input.city}
-- Bedrooms: {listing_input.bedrooms}
-- Bathrooms: {listing_input.bathrooms}
-- Square Meters: {listing_input.square_meters}
-- List Price: {listing_input.list_price}
-- Property Type: {listing_input.property_type}
-- Year Built: {listing_input.year_built}
-- Features: Pool={listing_input.has_pool}, Garage={listing_input.has_garage}, Basement={listing_input.has_basement}, Fireplace={listing_input.has_fireplace}
+STRUCTURED DATA:
+{json.dumps(listing_summary, indent=2, ensure_ascii=False)}
 
-Description:
-{listing_input.description}
+DESCRIPTION:
+{listing_input.description[:1000]}
 
-Please identify any inconsistencies between what the description claims and what the structured data shows.
-Look for mismatches in:
-- Property size/area (description vs square_meters)
-- Number of rooms/bedrooms/bathrooms
+TASK: Compare the description with the structured data. Find mismatches in:
+- Size/area (square_meters)
+- Room counts (bedrooms, bathrooms)
 - Property type
 - Features (pool, garage, basement, fireplace)
-- Price information
-- Condition/state
+- Price
 - Year built
-- Location details
 
-Return a ConsistencyCheckResult with all findings properly categorized by severity.
+IMPORTANT: Return a COMPLETE, VALID JSON object. The JSON must include ALL fields:
+{{
+  "listing_id": "{listing_input.listing_id}",
+  "property_address": "{listing_input.property_address}",
+  "total_inconsistencies": <number>,
+  "is_consistent": <true/false>,
+  "findings": [
+    {{
+      "field_name": "<field>",
+      "description_says": "<brief>",
+      "listing_data_says": "<brief>",
+      "severity": "<critical|medium|low>",
+      "explanation": "<brief>"
+    }}
+  ],
+  "summary": "<one line>"
+}}
+
+CRITICAL: 
+- Keep findings array to MAX 10 items (most important ones only)
+- Keep all text fields SHORT (max 200 chars for description_says/listing_data_says, max 300 for explanation)
+- Ensure the JSON is COMPLETE and VALID - do not truncate
+- If no inconsistencies found, return findings: [] and is_consistent: true
 """
     
     # Get JSON schema from Pydantic model and sanitize it for LLM compatibility
@@ -713,7 +807,14 @@ Return a ConsistencyCheckResult with all findings properly categorized by severi
     messages = [
         {
             "role": "system",
-            "content": "You are a real estate data quality analyst. Identify inconsistencies between property descriptions and structured data. Always return valid JSON matching the schema exactly.",
+            "content": """You are a real estate data quality analyst. Your task is to identify inconsistencies between property descriptions and structured data.
+
+IMPORTANT:
+- Return ONLY valid JSON matching the exact schema
+- Keep findings array concise (max 10 items)
+- Use severity levels: "critical", "medium", or "low"
+- Ensure all required fields are present
+- The JSON must be complete and valid""",
         },
         {
             "role": "user",
@@ -746,24 +847,68 @@ Return a ConsistencyCheckResult with all findings properly categorized by severi
             Actor.log.warning("No content in LLM response")
             return None
         
+        # Log full content for debugging if parsing fails
+        Actor.log.debug(f"LLM response content length: {len(content) if content else 0} characters")
+        if content and len(content) > 2000:
+            Actor.log.debug(f"Content preview (first 500 chars): {content[:500]}")
+            Actor.log.debug(f"Content preview (last 500 chars): {content[-500:]}")
+        
         # Parse JSON content
         consistency_data = parse_json_content(content)
         if not consistency_data:
+            # Log more details about the failure
+            if content:
+                Actor.log.error(f"Failed to parse JSON. Content length: {len(content)}")
+                Actor.log.error(f"Content start: {content[:300]}")
+                Actor.log.error(f"Content end: {content[-300:] if len(content) > 300 else content}")
             return None
+        
+        # Validate and fix data before creating ConsistencyCheckResult
+        # Ensure required fields are present
+        if 'listing_id' not in consistency_data:
+            consistency_data['listing_id'] = listing_input.listing_id
+        if 'property_address' not in consistency_data:
+            consistency_data['property_address'] = listing_input.property_address
+        
+        # Ensure checked_at is set if not provided
+        if 'checked_at' not in consistency_data:
+            from datetime import datetime
+            consistency_data['checked_at'] = datetime.now().isoformat()
+        
+        # Ensure findings is a list
+        if 'findings' not in consistency_data:
+            consistency_data['findings'] = []
+        elif not isinstance(consistency_data['findings'], list):
+            Actor.log.warning("Findings is not a list, converting...")
+            consistency_data['findings'] = []
+        
+        # Ensure total_inconsistencies is set and reasonable
+        findings_count = len(consistency_data.get('findings', []))
+        if 'total_inconsistencies' not in consistency_data:
+            consistency_data['total_inconsistencies'] = findings_count
+        elif consistency_data['total_inconsistencies'] != findings_count:
+            # If there's a mismatch, use the actual findings count (more reliable)
+            Actor.log.warning(f"total_inconsistencies ({consistency_data['total_inconsistencies']}) doesn't match findings count ({findings_count}), using findings count")
+            consistency_data['total_inconsistencies'] = findings_count
+        
+        # Ensure is_consistent is set
+        if 'is_consistent' not in consistency_data:
+            consistency_data['is_consistent'] = len(consistency_data.get('findings', [])) == 0
+        
+        # Ensure summary is present
+        if 'summary' not in consistency_data or not consistency_data['summary']:
+            num_findings = len(consistency_data.get('findings', []))
+            consistency_data['summary'] = f"Found {num_findings} inconsistency(ies)" if num_findings > 0 else "No inconsistencies found"
         
         # Create ConsistencyCheckResult from parsed data
         try:
-            # Ensure checked_at is set if not provided
-            if 'checked_at' not in consistency_data:
-                from datetime import datetime
-                consistency_data['checked_at'] = datetime.now().isoformat()
-            
             consistency_result = ConsistencyCheckResult(**consistency_data)
             Actor.log.info(f"Successfully created ConsistencyCheckResult: {consistency_result.total_inconsistencies} inconsistencies found")
             return consistency_result
         except Exception as e:
             Actor.log.exception(f"Failed to create ConsistencyCheckResult from LLM response: {e}")
-            Actor.log.debug(f"LLM response data: {consistency_data}")
+            Actor.log.debug(f"LLM response data keys: {list(consistency_data.keys())}")
+            Actor.log.debug(f"LLM response data (first 500 chars): {str(consistency_data)[:500]}")
             return None
             
     except Exception as e:

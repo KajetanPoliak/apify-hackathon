@@ -383,13 +383,32 @@ class TestCheckConsistencyWithStructuredOutput:
     @pytest.mark.asyncio
     async def test_check_consistency_success(self, mock_listing_input):
         """Test successful consistency check with mocked LLM response."""
-        # Create expected ConsistencyCheckResult
+        from src.models import InconsistencyFinding, SeverityLevel
+        
+        # Create expected ConsistencyCheckResult with actual findings
+        findings = [
+            InconsistencyFinding(
+                field_name="bedrooms",
+                description_says="3 bedrooms",
+                listing_data_says="4 bedrooms",
+                severity=SeverityLevel.MEDIUM,
+                explanation="Description says 3 but data shows 4",
+            ),
+            InconsistencyFinding(
+                field_name="square_meters",
+                description_says="60 m²",
+                listing_data_says="57 m²",
+                severity=SeverityLevel.LOW,
+                explanation="Small area discrepancy",
+            ),
+        ]
+        
         expected_result = ConsistencyCheckResult(
             listing_id=mock_listing_input.listing_id,
             property_address=mock_listing_input.property_address,
             total_inconsistencies=2,
             is_consistent=False,
-            findings=[],
+            findings=findings,
             summary="Found 2 inconsistencies in the listing",
         )
         

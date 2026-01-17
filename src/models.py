@@ -97,7 +97,7 @@ class ListingInput(BaseModel):
     description: str = Field(
         ..., 
         min_length=10,
-        description="The full text description written by the realtor. Must be at least 10 characters long. Use the scraped description or a summary if description is missing"
+        description="The full text description written by the realtor. Must be at least 10 characters long. Use the scraped description or a summary if description is missing. Use original language of the description."
     )
 
     # Optional metadata
@@ -109,31 +109,64 @@ class ListingInput(BaseModel):
 class InconsistencyFinding(BaseModel):
     """A single inconsistency found between description and listing data"""
 
-    field_name: str = Field(..., description="Which field has the issue (e.g., 'bedrooms', 'square_meters')")
+    field_name: str = Field(
+        ..., 
+        description="Field name with the issue (e.g., 'bedrooms', 'square_meters', 'list_price')"
+    )
 
-    description_says: str = Field(..., description="What the text description claims")
-    listing_data_says: str = Field(..., description="What the structured data shows")
+    description_says: str = Field(
+        ..., 
+        max_length=200,
+        description="What the description claims (keep concise, max 200 chars)"
+    )
+    listing_data_says: str = Field(
+        ..., 
+        max_length=200,
+        description="What the structured data shows (keep concise, max 200 chars)"
+    )
 
-    severity: SeverityLevel
-    explanation: str = Field(..., description="Why this is inconsistent")
+    severity: SeverityLevel = Field(
+        ..., 
+        description="Severity: 'critical' for major contradictions, 'medium' for notable issues, 'low' for minor discrepancies"
+    )
+    explanation: str = Field(
+        ..., 
+        max_length=300,
+        description="Brief explanation of the inconsistency (keep concise, max 300 chars)"
+    )
 
 
 class ConsistencyCheckResult(BaseModel):
     """Result of checking a listing for internal consistency"""
 
-    listing_id: str
-    property_address: str
-    checked_at: datetime = Field(default_factory=datetime.now)
+    listing_id: str = Field(..., description="Listing ID from the original listing")
+    property_address: str = Field(..., description="Property address")
+    checked_at: datetime = Field(default_factory=datetime.now, description="Timestamp when check was performed")
 
     # Simple metrics
-    total_inconsistencies: int
-    is_consistent: bool = Field(..., description="True if no inconsistencies found")
+    total_inconsistencies: int = Field(
+        ..., 
+        ge=0,
+        description="Total number of inconsistencies found (must match findings array length)"
+    )
+    is_consistent: bool = Field(
+        ..., 
+        description="True if no inconsistencies found (total_inconsistencies == 0), false otherwise"
+    )
 
-    # The findings
-    findings: list[InconsistencyFinding] = Field(default_factory=list)
+    # The findings - limit to reasonable number to avoid huge responses
+    findings: list[InconsistencyFinding] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Array of inconsistency findings (max 20 items, keep most important ones)"
+    )
 
     # Quick summary
-    summary: str = Field(..., description="One-line summary of the check")
+    summary: str = Field(
+        ..., 
+        max_length=200,
+        description="Brief one-line summary of the check (max 200 chars)"
+    )
 
 
 # Bezrealitky.cz Scraper Models
