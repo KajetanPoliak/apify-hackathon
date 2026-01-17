@@ -5,11 +5,19 @@ This Actor scrapes detailed information from Sreality.cz property listing pages.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from typing import Any
 
+import aiohttp
+from dotenv import load_dotenv
+
 from apify import Actor
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def clean_text(text: str | None) -> str | None:
@@ -47,11 +55,245 @@ def extract_property_details(soup: Any) -> dict[str, Any]:
     return details
 
 
+async def call_openrouter_llm(
+    messages: list[dict[str, str]],
+    model: str = "google/gemini-2.0-flash-exp",
+    temperature: float = 0.7,
+) -> dict[str, Any] | None:
+    """Call OpenRouter actor to make LLM requests to Gemini models.
+    
+    Uses APIFY_TOKEN from environment for authentication (automatically handled by Actor.call).
+    
+    Args:
+        messages: List of message dicts with 'role' and 'content' keys
+        model: Gemini model identifier (e.g., 'google/gemini-2.0-flash-exp')
+        temperature: Sampling temperature (0.0-2.0)
+    
+    Returns:
+        Response dict with 'choices' containing the LLM response, or None on error
+    """
+    try:
+        # Prepare input for OpenRouter actor
+        # Note: APIFY_TOKEN is automatically used by Actor.call() for authentication
+        openrouter_input = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        
+        Actor.log.info(f"Calling OpenRouter actor with model: {model}")
+        
+        # Call the OpenRouter actor
+        run = await Actor.call(
+            actor_id="apify/openrouter",
+            run_input=openrouter_input,
+        )
+        
+        if run is None:
+            Actor.log.error("Failed to start OpenRouter actor run")
+            return None
+        
+        # Actor.call returns an ActorRun object - access id attribute directly
+        run_id = run.id
+        Actor.log.info(f"OpenRouter actor run ID: {run_id}")
+        
+        # Get the run client to check status and wait if needed
+        run_client = Actor.apify_client.run(run_id)
+        run_info = await run_client.get()
+        
+        # Wait for the run to finish if it's still running
+        if run_info.get("status") not in ["SUCCEEDED", "FAILED", "ABORTED"]:
+            Actor.log.info("Waiting for OpenRouter actor run to complete...")
+            await run_client.wait_for_finish(max_wait_secs=300)  # 5 minute timeout
+            run_info = await run_client.get()
+        
+        if run_info.get("status") != "SUCCEEDED":
+            Actor.log.error(f"OpenRouter actor run failed with status: {run_info.get('status')}")
+            return None
+        
+        # Try to get output from key-value store first (common pattern)
+        kvs_client = run_client.key_value_store()
+        output_record = await kvs_client.get_record("OUTPUT")
+        
+        if output_record and output_record.get("value"):
+            output_value = output_record["value"]
+            if isinstance(output_value, str):
+                try:
+                    output_value = json.loads(output_value)
+                except json.JSONDecodeError:
+                    # If it's not JSON, return as string
+                    pass
+            
+            Actor.log.info("Successfully received response from OpenRouter (KVS)")
+            return output_value
+        
+        # Fallback: try to get from dataset if available
+        dataset_client = run_client.dataset()
+        dataset_items = await dataset_client.list_items()
+        
+        if dataset_items and len(dataset_items.items) > 0:
+            # Return the first item or all items
+            Actor.log.info("Successfully received response from OpenRouter (Dataset)")
+            return dataset_items.items[0] if len(dataset_items.items) == 1 else dataset_items.items
+        
+        Actor.log.warning("No output found in OpenRouter actor run (checked KVS and dataset)")
+        return None
+            
+    except Exception as e:
+        Actor.log.exception(f"Error calling OpenRouter actor: {e}")
+        return None
+
+
+async def analyze_property_with_llm(
+    property_data: dict[str, Any],
+    model: str = "google/gemini-2.0-flash-exp",
+    temperature: float = 0.7,
+) -> dict[str, Any] | None:
+    """Analyze a property listing using LLM.
+    
+    This is an example function showing how to use the OpenRouter integration
+    to analyze scraped property data with a Gemini model.
+    
+    Uses APIFY_TOKEN from environment for authentication.
+    
+    Args:
+        property_data: Dictionary containing property information (title, description, price, etc.)
+        model: Gemini model to use
+        temperature: LLM temperature
+    
+    Returns:
+        Analysis result from LLM, or None on error
+    """
+    # Build prompt for property analysis
+    prompt = f"""Analyze this real estate listing and provide insights:
+
+Title: {property_data.get('title', 'N/A')}
+Description: {property_data.get('description', 'N/A')}
+Price: {property_data.get('price', 'N/A')}
+Location: {property_data.get('location', 'N/A')}
+Attributes: {json.dumps(property_data.get('attributes', {}), ensure_ascii=False)}
+
+Please provide:
+1. A brief summary of the property
+2. Key selling points
+3. Any potential concerns or red flags
+4. Estimated value assessment (if possible)
+
+Respond in JSON format with keys: summary, sellingPoints (array), concerns (array), valueAssessment.
+"""
+    
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a real estate analyst. Provide structured, objective analysis of property listings.",
+        },
+        {
+            "role": "user",
+            "content": prompt,
+        },
+    ]
+    
+    return await call_openrouter_llm(
+        messages=messages,
+        model=model,
+        temperature=temperature,
+    )
+
+
 async def main() -> None:
     """Main entry point for the Sreality scraper Actor."""
     async with Actor:
         # Get Actor input
         actor_input = await Actor.get_input() or {}
+        
+        # LLM configuration
+        skip_scraping = actor_input.get('skipScraping', False)
+        use_llm = actor_input.get('useLLM', False)
+        gemini_model = actor_input.get('geminiModel', 'google/gemini-2.0-flash-exp')
+        llm_temperature = actor_input.get('llmTemperature', 0.7)
+        
+        # If skipScraping is enabled, test LLM only
+        if skip_scraping:
+            Actor.log.info('=' * 60)
+            Actor.log.info('SKIP SCRAPING MODE: Testing LLM functionality only')
+            Actor.log.info('=' * 60)
+            
+            if not use_llm:
+                Actor.log.warning('skipScraping is enabled but useLLM is false. Enabling LLM for test...')
+                use_llm = True
+            
+            # Create sample property data for testing
+            sample_property = {
+                'url': 'https://www.sreality.cz/detail/test/123456',
+                'title': 'Pronájem bytu 4+1 180 m² Martinská, Praha - Staré Město',
+                'description': 'Klasický, prostorný, 3 ložnicový byt v historickém centru Prahy. Byt se nachází ve velmi dobrém stavu, je plně vybavený a nachází se v blízkosti Václavského náměstí. Ideální pro rodinu nebo sdílené bydlení.',
+                'price': '55 000 Kč/měsíc',
+                'priceType': 'rental',
+                'location': 'Praha - Staré Město',
+                'attributes': {
+                    'Cena': '55 000 Kč/měsíc',
+                    'Plocha': 'Užitná plocha 180 m²',
+                    'Energetická náročnost': 'Mimořádně nehospodárná',
+                    'Stavba': 'Smíšená, Ve velmi dobrém stavu, 2. podlaží z 6',
+                    'Parkování': 'Možnost parkování',
+                    'Balkon': 'Ano'
+                },
+                'seller': {
+                    'name': 'Test Real Estate Agency',
+                    'phone': '+420 123 456 789',
+                    'email': 'test@realestate.cz'
+                },
+                'scrapedAt': 'https://www.sreality.cz/detail/test/123456'
+            }
+            
+            Actor.log.info('Testing LLM analysis with sample property data...')
+            Actor.log.info(f'Property: {sample_property["title"]}')
+            
+            try:
+                llm_analysis = await analyze_property_with_llm(
+                    property_data=sample_property,
+                    model=gemini_model,
+                    temperature=llm_temperature,
+                )
+                
+                if llm_analysis:
+                    # Extract the response content
+                    if 'choices' in llm_analysis and len(llm_analysis['choices']) > 0:
+                        content = llm_analysis['choices'][0].get('message', {}).get('content', '')
+                        Actor.log.info('=' * 60)
+                        Actor.log.info('LLM ANALYSIS RESULT:')
+                        Actor.log.info('=' * 60)
+                        Actor.log.info(content)
+                        Actor.log.info('=' * 60)
+                        
+                        try:
+                            # Try to parse as JSON if it's structured
+                            analysis_json = json.loads(content)
+                            sample_property['llmAnalysis'] = analysis_json
+                            Actor.log.info('LLM response parsed as JSON successfully')
+                        except json.JSONDecodeError:
+                            # If not JSON, store as text
+                            sample_property['llmAnalysis'] = {'text': content}
+                            Actor.log.info('LLM response stored as text (not JSON)')
+                        
+                        # Push the test result to dataset
+                        await Actor.push_data(sample_property)
+                        Actor.log.info('Test result pushed to dataset')
+                    else:
+                        Actor.log.warning('LLM response did not contain expected structure')
+                        Actor.log.info(f'Full response: {json.dumps(llm_analysis, indent=2)}')
+                else:
+                    Actor.log.error('LLM analysis returned no result')
+                    
+            except Exception as e:
+                Actor.log.exception(f'Error during LLM test: {e}')
+                await Actor.fail(f'LLM test failed: {e}')
+            
+            Actor.log.info('LLM test completed!')
+            await Actor.exit()
+            return
+        
+        # Normal scraping mode
         start_urls = [
             url.get('url')
             for url in actor_input.get(
@@ -381,6 +623,37 @@ async def main() -> None:
             Actor.log.info(f'Extracted: {title}')
             if description:
                 Actor.log.info(f'Description preview: {description[:100]}...')
+            
+            # Optionally analyze with LLM if enabled
+            if use_llm:
+                try:
+                    Actor.log.info('Analyzing property with LLM...')
+                    llm_analysis = await analyze_property_with_llm(
+                        property_data=data,
+                        model=gemini_model,
+                        temperature=llm_temperature,
+                    )
+                    
+                    if llm_analysis:
+                        # Extract the response content
+                        if 'choices' in llm_analysis and len(llm_analysis['choices']) > 0:
+                            content = llm_analysis['choices'][0].get('message', {}).get('content', '')
+                            try:
+                                # Try to parse as JSON if it's structured
+                                analysis_json = json.loads(content)
+                                data['llmAnalysis'] = analysis_json
+                            except json.JSONDecodeError:
+                                # If not JSON, store as text
+                                data['llmAnalysis'] = {'text': content}
+                            
+                            Actor.log.info('LLM analysis completed successfully')
+                        else:
+                            Actor.log.warning('LLM response did not contain expected structure')
+                    else:
+                        Actor.log.warning('LLM analysis returned no result')
+                except Exception as e:
+                    Actor.log.exception(f'Error during LLM analysis: {e}')
+                    # Continue even if LLM fails
             
             # Store data to dataset
             await context.push_data(data)

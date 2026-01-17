@@ -6,6 +6,8 @@ requires-python = ">=3.10"
 dependencies = [
     "apify>=1.0.0",
     "crawlee>=1.2.1",
+    "apify-fingerprint-datapoints",
+    "browserforge[all]",
     "langchain-openai>=0.1.0",
     "openai>=1.0.0",
     "python-dotenv>=1.0.0",

@@ -205,12 +205,23 @@ wheels = [
 ]
 
 [[package]]
+name = "apify-fingerprint-datapoints"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/9f/e1449a37c023cc0b934834c5483a6a9eb5d2cada8d213c00d19e8ec965b7/apify_fingerprint_datapoints-0.7.0.tar.gz", hash = "sha256:785fb5c784956354ef950aae334b30b9c841c6203cd821e8e002bbfeed309355", size = 912588, upload-time = "2025-11-01T00:46:31.506Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/5b/eeb1b920e3b17daa1790b4b260476d0d12e2b05ab5dd2019f03671abb986/apify_fingerprint_datapoints-0.7.0-py3-none-any.whl", hash = "sha256:f272aeefd32f2040bb0a0395b1ab2db71a1432a4642784c9b9d62337cb7ff7f4", size = 665800, upload-time = "2025-11-01T00:46:29.784Z" },
+]
+
+[[package]]
 name = "apify-hackathon"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "apify" },
+    { name = "apify-fingerprint-datapoints" },
+    { name = "browserforge", extra = ["all"] },
     { name = "crawlee" },
     { name = "langchain-openai" },
     { name = "openai" },
@@ -238,7 +249,9 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "apify", specifier = ">=1.0.0" },
+    { name = "apify-fingerprint-datapoints" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "browserforge", extras = ["all"] },
     { name = "crawlee", specifier = ">=1.2.1" },
     { name = "langchain-openai", specifier = ">=0.1.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -327,6 +340,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/06/99/b2a4bd7dfaea7964974f947e1c76d6886d65fe5d24f687df2d85406b2609/black-25.12.0-cp314-cp314-win_amd64.whl", hash = "sha256:97596189949a8aad13ad12fcbb4ae89330039b96ad6742e6f6b45e75ad5cfd83", size = 1452042, upload-time = "2025-12-08T01:46:13.188Z" },
     { url = "https://files.pythonhosted.org/packages/b2/7c/d9825de75ae5dd7795d007681b752275ea85a1c5d83269b4b9c754c2aaab/black-25.12.0-cp314-cp314-win_arm64.whl", hash = "sha256:778285d9ea197f34704e3791ea9404cd6d07595745907dd2ce3da7a13627b29b", size = 1267446, upload-time = "2025-12-08T01:46:14.497Z" },
     { url = "https://files.pythonhosted.org/packages/68/11/21331aed19145a952ad28fca2756a1433ee9308079bd03bd898e903a2e53/black-25.12.0-py3-none-any.whl", hash = "sha256:48ceb36c16dbc84062740049eef990bb2ce07598272e673c17d1a7720c71c828", size = 206191, upload-time = "2025-12-08T01:40:50.963Z" },
+]
+
+[[package]]
+name = "browserforge"
+version = "1.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/df/5c/fe4d8cc5d5e61a5b1585190bba19d25bb76c45fdfe9c7bf264f5301fcf33/browserforge-1.2.3.tar.gz", hash = "sha256:d5bec6dffd4748b30fbac9f9c1ef33b26c01a23185240bf90011843e174b7ecc", size = 38072, upload-time = "2025-01-29T09:45:48.711Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/53/c60eb5bd26cf8689e361031bebc431437bc988555e80ba52d48c12c1d866/browserforge-1.2.3-py3-none-any.whl", hash = "sha256:a6c71ed4688b2f1b0bee757ca82ddad0007cbba68a71eca66ca607dde382f132", size = 39626, upload-time = "2025-01-29T09:45:47.531Z" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "orjson" },
 ]
 
 [[package]]
