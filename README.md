@@ -14,6 +14,7 @@ Python-based Apify Actor using `uv` for package management.
 ├── Dockerfile             # Docker container definition
 ├── pyproject.toml         # Python project configuration (uv)
 ├── uv.lock                # Locked dependencies
+├── .env.example           # Environment variables template
 └── README.md              # This file
 ```
 
@@ -38,6 +39,15 @@ Python-based Apify Actor using `uv` for package management.
 3. **Install dependencies**:
    ```bash
    uv sync
+   ```
+
+4. **Set up environment variables** (optional, for local development):
+   ```bash
+   # Copy the example file
+   cp .env.example .env
+   
+   # Edit .env and add your Apify API token
+   # Get your token from: https://console.apify.com/account/integrations
    ```
 
 ## Development
