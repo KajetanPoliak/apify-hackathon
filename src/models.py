@@ -37,18 +37,54 @@ class ListingInput(BaseModel):
     zip_code: str
 
     # Structured listing data (the "facts")
-    bedrooms: int = Field(..., ge=0)
-    bathrooms: float = Field(..., ge=0, description="Can be decimal for half-baths")
-    square_feet: int | None = Field(None, ge=0)
-    lot_size_sqft: int | None = Field(None, ge=0)
-    year_built: int | None = Field(None, ge=1800, le=2030)
+    bedrooms: int = Field(
+        ..., 
+        ge=0,
+        description="Number of bedrooms. Must be 0 or greater. Extract from disposition (e.g., '3+kk' = 3 bedrooms)"
+    )
+    bathrooms: float = Field(
+        ..., 
+        ge=0, 
+        description="Number of bathrooms (can be decimal for half-baths). Must be 0 or greater. Typically 1-2 for Czech apartments"
+    )
+    square_meters: int | None = Field(
+        None, 
+        ge=0,
+        description="Property size in square meters. Must be 0 or greater if provided. Convert from m² (1 m² = 10.764 sqft)"
+    )
+    lot_size_sqft: int | None = Field(
+        None, 
+        ge=0,
+        description="Lot size in square meters. Must be 0 or greater if provided"
+    )
+    year_built: int | None = Field(
+        None, 
+        ge=1800, 
+        le=2030,
+        description="Year the property was built. Must be between 1800 and 2030 if provided"
+    )
 
-    property_type: str | None = Field(None, description="e.g., Single Family, Condo, Townhouse")
-    stories: int | None = Field(None, ge=1)
-    garage_spaces: int | None = Field(None, ge=0)
+    property_type: str | None = Field(
+        None, 
+        description="Property type (e.g., 'Apartment', 'Single Family', 'Condo', 'Townhouse'). For Czech listings, typically 'Apartment'"
+    )
+    stories: int | None = Field(
+        None, 
+        ge=1,
+        description="Number of stories/floors. Must be 1 or greater if provided"
+    )
+    garage_spaces: int | None = Field(
+        None, 
+        ge=0,
+        description="Number of garage spaces. Must be 0 or greater if provided"
+    )
 
     # Pricing
-    list_price: float = Field(..., gt=0)
+    list_price: float = Field(
+        ..., 
+        gt=0,
+        description="Property listing price in CZK. MUST be greater than 0. Extract numeric value from price string (e.g., '8 499 000 Kč' -> 8499000.0)"
+    )
 
     # Features (structured)  # noqa: ERA001
     has_pool: bool | None = None
@@ -57,8 +93,11 @@ class ListingInput(BaseModel):
     has_fireplace: bool | None = None
 
     # The text description (what we'll fact-check against the above)
-    description: str = Field(..., min_length=10,
-                           description="The full text description written by the realtor")
+    description: str = Field(
+        ..., 
+        min_length=10,
+        description="The full text description written by the realtor. Must be at least 10 characters long. Use the scraped description or a summary if description is missing"
+    )
 
     # Optional metadata
     realtor_name: str | None = None
@@ -69,7 +108,7 @@ class ListingInput(BaseModel):
 class InconsistencyFinding(BaseModel):
     """A single inconsistency found between description and listing data"""
 
-    field_name: str = Field(..., description="Which field has the issue (e.g., 'bedrooms', 'square_feet')")
+    field_name: str = Field(..., description="Which field has the issue (e.g., 'bedrooms', 'square_meters')")
 
     description_says: str = Field(..., description="What the text description claims")
     listing_data_says: str = Field(..., description="What the structured data shows")

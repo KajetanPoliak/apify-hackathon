@@ -11,6 +11,86 @@ from apify import Actor
 from src.models import ListingInput, ConsistencyCheckResult
 
 
+def sanitize_json_schema_for_llm(schema: dict[str, Any]) -> dict[str, Any]:
+    """Sanitize JSON schema to be compatible with LLM providers.
+    
+    Some LLM providers (like Azure) don't accept certain JSON schema formats.
+    This function removes or fixes incompatible format specifications.
+    
+    Args:
+        schema: JSON schema dictionary from Pydantic model
+    
+    Returns:
+        Sanitized JSON schema compatible with LLM providers
+    """
+    if not isinstance(schema, dict):
+        return schema
+    
+    # Create a copy to avoid modifying the original
+    sanitized = schema.copy()
+    
+    # Remove or fix "uri" format (not recognized by some providers)
+    if "format" in sanitized and sanitized["format"] == "uri":
+        # Change to string type without format, or use "uri-reference" if supported
+        sanitized.pop("format", None)
+        if "type" not in sanitized:
+            sanitized["type"] = "string"
+    
+    # Recursively sanitize nested structures
+    if "properties" in sanitized:
+        sanitized["properties"] = {
+            key: sanitize_json_schema_for_llm(value)
+            for key, value in sanitized["properties"].items()
+        }
+        
+        # Azure requires all properties to be in the required array
+        # Optional fields can still be null through their anyOf structure
+        if "required" not in sanitized or not isinstance(sanitized["required"], list):
+            sanitized["required"] = []
+        
+        # Add all properties to required array (Azure strict mode requirement)
+        all_properties = set(sanitized["properties"].keys())
+        current_required = set(sanitized["required"])
+        sanitized["required"] = sorted(list(all_properties | current_required))
+        
+        # Azure requires additionalProperties to be explicitly set to false
+        # This must be set for any object schema with properties
+        sanitized["additionalProperties"] = False
+    
+    if "items" in sanitized:
+        sanitized["items"] = sanitize_json_schema_for_llm(sanitized["items"])
+    
+    if "anyOf" in sanitized:
+        sanitized["anyOf"] = [
+            sanitize_json_schema_for_llm(item) for item in sanitized["anyOf"]
+        ]
+    
+    if "oneOf" in sanitized:
+        sanitized["oneOf"] = [
+            sanitize_json_schema_for_llm(item) for item in sanitized["oneOf"]
+        ]
+    
+    if "allOf" in sanitized:
+        sanitized["allOf"] = [
+            sanitize_json_schema_for_llm(item) for item in sanitized["allOf"]
+        ]
+    
+    # Handle definitions/defs (for schema references)
+    if "definitions" in sanitized:
+        sanitized["definitions"] = {
+            key: sanitize_json_schema_for_llm(value)
+            for key, value in sanitized["definitions"].items()
+        }
+    
+    if "$defs" in sanitized:
+        sanitized["$defs"] = {
+            key: sanitize_json_schema_for_llm(value)
+            for key, value in sanitized["$defs"].items()
+        }
+    
+    return sanitized
+
+
 async def call_openrouter_llm(
     messages: list[dict[str, str]],
     model: str = "openrouter/auto",
@@ -267,16 +347,38 @@ async def convert_scraped_data_to_listing_input(
     
     # Extract numbers from text
     area_sqm = extract_number_from_text(area_str)
-    # Convert m² to square feet (1 m² = 10.764 sqft)
-    square_feet = int(area_sqm * 10.764) if area_sqm else None
+    # Use square meters directly (no conversion needed)
+    square_meters = area_sqm
     
     # Extract bedrooms from disposition (e.g., "3+kk" -> 3)
     bedrooms = extract_number_from_text(disposition) or 0
     
-    # Extract price
+    # Extract price with better parsing
     price_str = property_data.get('price', '')
-    price_match = re.search(r'(\d+[\s​]+\d+[\s​]+\d+|\d+)', price_str.replace(' ', '').replace('​', ''))
-    list_price = float(price_match.group(1).replace(' ', '')) if price_match else 0.0
+    # Try to extract price - handle Czech format with spaces (e.g., "8 499 000 Kč")
+    price_value = None
+    if price_str:
+        # Remove all spaces and non-digit characters except decimal point
+        price_clean = re.sub(r'[^\d.]', '', price_str.replace(' ', '').replace('​', ''))
+        if price_clean:
+            try:
+                price_value = float(price_clean)
+            except ValueError:
+                pass
+    
+    # Fallback: try to extract from attributes
+    if not price_value:
+        price_per_m2 = property_details.get('pricePerM2') or property_data.get('attributes', {}).get('Cena za jednotku', '')
+        if price_per_m2:
+            price_clean = re.sub(r'[^\d.]', '', str(price_per_m2).replace(' ', '').replace('​', ''))
+            if price_clean:
+                try:
+                    price_per_m2_value = float(price_clean)
+                    # Estimate total price from price per m² and area
+                    if area_sqm and price_per_m2_value:
+                        price_value = price_per_m2_value * area_sqm
+                except ValueError:
+                    pass
     
     # Generate listing ID from URL
     import hashlib
@@ -299,32 +401,53 @@ Scraped Data:
 - Attributes: {json.dumps(property_data.get('attributes', {}), ensure_ascii=False)}
 - Amenities: {json.dumps(property_data.get('amenities', []), ensure_ascii=False)}
 
+CRITICAL CONSTRAINTS - MUST FOLLOW:
+- list_price: MUST be greater than 0. Extract numeric value from price string (e.g., "8 499 000 Kč" -> 8499000.0). 
+  If price is missing, calculate from pricePerM2 × area, or use a reasonable estimate (minimum 1,000,000 CZK for apartments).
+  NEVER use 0.0 or negative values.
+- bedrooms: MUST be 0 or greater. Extract from disposition (e.g., "3+kk" = 3 bedrooms).
+- bathrooms: MUST be 0 or greater. Typically 1-2 for Czech apartments.
+- description: MUST be at least 10 characters. Use scraped description or create a summary.
+- square_meters: If provided, MUST be 0 or greater. Extract from area (already in m²).
+- year_built: If provided, MUST be between 1800 and 2030.
+
 Instructions:
 1. Extract all available information from the scraped data
 2. Map Czech property data to the ListingInput format
 3. For missing required fields, use reasonable defaults:
    - state: "Czech Republic" or "CZ"
    - zip_code: "00000" if not available
-   - bedrooms: Extract from disposition (e.g., "3+kk" = 3 bedrooms)
-   - bathrooms: Estimate from disposition (typically 1-2 for Czech apartments)
-   - square_feet: Convert from m² (1 m² = 10.764 sqft)
-   - list_price: Extract numeric value from price string
+   - bedrooms: Extract from disposition (e.g., "3+kk" = 3 bedrooms), default to 1 if unknown
+   - bathrooms: Estimate from disposition (typically 1-2 for Czech apartments), default to 1.0 if unknown
+   - square_meters: Extract from area (already in m², no conversion needed)
+   - list_price: Extract numeric value from price string. If missing, estimate from pricePerM2 × area or use minimum 1,000,000 CZK
 4. Set listing_id to: {listing_id}
 5. Set listing_url to the scraped URL
 6. Extract property_address from location or title
 7. Extract city from location
 8. Check amenities for features (has_garage, has_basement, etc.)
 
-Return a complete ListingInput object with all fields properly filled.
+Return a complete ListingInput object with all fields properly filled and all constraints satisfied.
 """
     
-    # Get JSON schema from Pydantic model
-    listing_input_schema = ListingInput.model_json_schema()
+    # Get JSON schema from Pydantic model and sanitize it for LLM compatibility
+    listing_input_schema_raw = ListingInput.model_json_schema()
+    listing_input_schema = sanitize_json_schema_for_llm(listing_input_schema_raw)
     
     messages = [
         {
             "role": "system",
-            "content": "You are a data transformation expert. Convert scraped real estate data into structured ListingInput format. Always return valid JSON matching the schema exactly.",
+            "content": """You are a data transformation expert. Convert scraped real estate data into structured ListingInput format.
+
+CRITICAL: You MUST follow all field constraints:
+- list_price: MUST be greater than 0 (never 0.0 or negative)
+- bedrooms: MUST be 0 or greater
+- bathrooms: MUST be 0 or greater  
+- description: MUST be at least 10 characters
+- year_built: If provided, MUST be between 1800 and 2030
+- square_meters: If provided, MUST be 0 or greater
+
+Always return valid JSON matching the schema exactly with all constraints satisfied.""",
         },
         {
             "role": "user",
@@ -402,7 +525,63 @@ Return a complete ListingInput object with all fields properly filled.
             else:
                 listing_data = content
             
-            # Create ListingInput from parsed data
+            # Validate and fix data before creating ListingInput
+            # Fix list_price if invalid (must be > 0)
+            if listing_data.get('list_price') is None or listing_data.get('list_price', 0) <= 0:
+                Actor.log.warning(f"Invalid list_price from LLM: {listing_data.get('list_price')}, attempting to fix...")
+                # Try to use extracted price value
+                if price_value and price_value > 0:
+                    listing_data['list_price'] = price_value
+                    Actor.log.info(f"Fixed list_price using extracted value: {price_value}")
+                else:
+                    # Calculate from price per m² if available
+                    price_per_m2 = property_details.get('pricePerM2') or property_data.get('attributes', {}).get('Cena za jednotku', '')
+                    if price_per_m2 and area_sqm:
+                        price_clean = re.sub(r'[^\d.]', '', str(price_per_m2).replace(' ', '').replace('​', ''))
+                        if price_clean:
+                            try:
+                                price_per_m2_value = float(price_clean)
+                                calculated_price = price_per_m2_value * area_sqm
+                                if calculated_price > 0:
+                                    listing_data['list_price'] = calculated_price
+                                    Actor.log.info(f"Fixed list_price using calculated value: {calculated_price}")
+                                else:
+                                    listing_data['list_price'] = 1000000.0  # Minimum fallback
+                                    Actor.log.warning(f"Using minimum fallback price: 1000000.0")
+                            except (ValueError, TypeError):
+                                listing_data['list_price'] = 1000000.0  # Minimum fallback
+                                Actor.log.warning(f"Using minimum fallback price: 1000000.0")
+                    else:
+                        # Use minimum reasonable price for Czech apartments
+                        listing_data['list_price'] = 1000000.0
+                        Actor.log.warning(f"Using minimum fallback price: 1000000.0")
+            
+            # Fix description if too short
+            if listing_data.get('description'):
+                desc = listing_data['description']
+                if len(desc) < 10:
+                    Actor.log.warning(f"Description too short ({len(desc)} chars), extending...")
+                    # Use title or create a basic description
+                    title = property_data.get('title', '')
+                    if title and len(title) >= 10:
+                        listing_data['description'] = title
+                    else:
+                        listing_data['description'] = f"Property listing in {city}. {desc}"[:500]
+            
+            # Ensure bedrooms and bathrooms are valid
+            if listing_data.get('bedrooms') is None or listing_data.get('bedrooms', -1) < 0:
+                listing_data['bedrooms'] = max(0, bedrooms)  # Use extracted value or 0
+            if listing_data.get('bathrooms') is None or listing_data.get('bathrooms', -1) < 0:
+                listing_data['bathrooms'] = 1.0  # Default to 1 bathroom
+            
+            # Fix year_built if out of range
+            if listing_data.get('year_built') is not None:
+                year = listing_data['year_built']
+                if year < 1800 or year > 2030:
+                    Actor.log.warning(f"Year built out of range: {year}, setting to None")
+                    listing_data['year_built'] = None
+            
+            # Create ListingInput from parsed and validated data
             try:
                 listing_input = ListingInput(**listing_data)
                 Actor.log.info(f"Successfully converted to ListingInput: {listing_input.listing_id}")
@@ -444,7 +623,7 @@ Listing Data:
 - City: {listing_input.city}
 - Bedrooms: {listing_input.bedrooms}
 - Bathrooms: {listing_input.bathrooms}
-- Square Feet: {listing_input.square_feet}
+- Square Meters: {listing_input.square_meters}
 - List Price: {listing_input.list_price}
 - Property Type: {listing_input.property_type}
 - Year Built: {listing_input.year_built}
@@ -455,7 +634,7 @@ Description:
 
 Please identify any inconsistencies between what the description claims and what the structured data shows.
 Look for mismatches in:
-- Property size/area (description vs square_feet)
+- Property size/area (description vs square_meters)
 - Number of rooms/bedrooms/bathrooms
 - Property type
 - Features (pool, garage, basement, fireplace)
@@ -467,8 +646,9 @@ Look for mismatches in:
 Return a ConsistencyCheckResult with all findings properly categorized by severity.
 """
     
-    # Get JSON schema from Pydantic model
-    consistency_check_schema = ConsistencyCheckResult.model_json_schema()
+    # Get JSON schema from Pydantic model and sanitize it for LLM compatibility
+    consistency_check_schema_raw = ConsistencyCheckResult.model_json_schema()
+    consistency_check_schema = sanitize_json_schema_for_llm(consistency_check_schema_raw)
     
     messages = [
         {

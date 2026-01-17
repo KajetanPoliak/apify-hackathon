@@ -33,7 +33,7 @@ def generate_mock_inconsistency_results() -> list[ConsistencyCheckResult]:
                     explanation="Description mentions 3 bedrooms but structured data shows 4+1 layout with 4 bedrooms"
                 ),
                 InconsistencyFinding(
-                    field_name="square_feet",
+                    field_name="square_meters",
                     description_says="prostorný byt o ploše 180 m²",
                     listing_data_says="Užitná plocha 150 m²",
                     severity=SeverityLevel.MEDIUM,
@@ -297,7 +297,7 @@ def generate_mock_listing_input(
         zip_code="10000",
         bedrooms=3,
         bathrooms=1.0,
-        square_feet=614,  # 57 m² * 10.764
+        square_meters=57,  # 57 m²
         lot_size_sqft=None,
         year_built=1985,
         property_type="Apartment",
@@ -335,7 +335,7 @@ def generate_mock_listing_inputs() -> list[ListingInput]:
             zip_code="10000",
             bedrooms=4,
             bathrooms=2.0,
-            square_feet=1076,  # 100 m² * 10.764
+            square_meters=100,  # 100 m²
             lot_size_sqft=None,
             year_built=2010,
             property_type="Apartment",
@@ -358,7 +358,7 @@ def generate_mock_listing_inputs() -> list[ListingInput]:
             zip_code="12000",
             bedrooms=2,
             bathrooms=1.0,
-            square_feet=430,  # 40 m² * 10.764
+            square_meters=40,  # 40 m²
             lot_size_sqft=None,
             year_built=1995,
             property_type="Apartment",

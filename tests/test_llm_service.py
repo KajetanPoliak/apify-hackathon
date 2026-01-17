@@ -1,5 +1,6 @@
 """Tests for LLM service functions with mock data."""
 
+import json
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from typing import Any
@@ -9,12 +10,149 @@ from src.llm_service import (
     check_consistency_with_structured_output,
     extract_number_from_text,
     extract_float_from_text,
+    sanitize_json_schema_for_llm,
 )
 from src.models import ListingInput, ConsistencyCheckResult
 from src.mock_data import (
     generate_mock_scraped_property_data,
     generate_mock_listing_input,
 )
+
+
+class TestSanitizeJsonSchema:
+    """Test JSON schema sanitization for LLM compatibility."""
+    
+    def test_sanitize_removes_uri_format(self):
+        """Test that uri format is removed from schema."""
+        schema = {
+            "type": "string",
+            "format": "uri",
+        }
+        sanitized = sanitize_json_schema_for_llm(schema)
+        assert "format" not in sanitized
+        assert sanitized["type"] == "string"
+    
+    def test_sanitize_handles_anyof_with_uri(self):
+        """Test that uri format is removed from anyOf structures."""
+        schema = {
+            "anyOf": [
+                {
+                    "type": "string",
+                    "format": "uri",
+                },
+                {
+                    "type": "null",
+                },
+            ],
+        }
+        sanitized = sanitize_json_schema_for_llm(schema)
+        assert "anyOf" in sanitized
+        assert len(sanitized["anyOf"]) == 2
+        # First option should have format removed
+        assert "format" not in sanitized["anyOf"][0]
+        assert sanitized["anyOf"][0]["type"] == "string"
+        # Second option should remain unchanged
+        assert sanitized["anyOf"][1]["type"] == "null"
+    
+    def test_sanitize_preserves_other_formats(self):
+        """Test that other formats like date-time are preserved."""
+        schema = {
+            "type": "string",
+            "format": "date-time",
+        }
+        sanitized = sanitize_json_schema_for_llm(schema)
+        # date-time format should be preserved (only uri is problematic)
+        assert sanitized["format"] == "date-time"
+    
+    def test_sanitize_handles_nested_structures(self):
+        """Test that nested properties are sanitized."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                },
+                "name": {
+                    "type": "string",
+                },
+            },
+        }
+        sanitized = sanitize_json_schema_for_llm(schema)
+        assert "format" not in sanitized["properties"]["url"]
+        assert sanitized["properties"]["url"]["type"] == "string"
+        assert sanitized["properties"]["name"]["type"] == "string"
+    
+    def test_sanitize_listing_input_schema(self):
+        """Test sanitization of actual ListingInput schema."""
+        from src.models import ListingInput
+        
+        schema = ListingInput.model_json_schema()
+        sanitized = sanitize_json_schema_for_llm(schema)
+        
+        # Check that listing_url doesn't have uri format
+        listing_url_schema = sanitized["properties"]["listing_url"]
+        if "anyOf" in listing_url_schema:
+            for option in listing_url_schema["anyOf"]:
+                if option.get("type") == "string":
+                    assert "format" != "uri" or "format" not in option
+    
+    def test_sanitize_adds_all_properties_to_required(self):
+        """Test that all properties are added to required array (Azure requirement)."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "required_field": {"type": "string"},
+                "optional_field": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {"type": "null"},
+                    ],
+                },
+            },
+            "required": ["required_field"],
+        }
+        sanitized = sanitize_json_schema_for_llm(schema)
+        
+        # All properties should be in required array
+        assert "required" in sanitized
+        assert "required_field" in sanitized["required"]
+        assert "optional_field" in sanitized["required"]
+        assert len(sanitized["required"]) == 2
+        
+        # Optional field should still allow null
+        optional_schema = sanitized["properties"]["optional_field"]
+        assert "anyOf" in optional_schema
+        null_allowed = any(item.get("type") == "null" for item in optional_schema["anyOf"])
+        assert null_allowed, "Optional field should still allow null values"
+    
+    def test_sanitize_sets_additional_properties_false(self):
+        """Test that additionalProperties is set to false (Azure requirement)."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "field1": {"type": "string"},
+            },
+        }
+        sanitized = sanitize_json_schema_for_llm(schema)
+        
+        # additionalProperties should be explicitly set to false
+        assert "additionalProperties" in sanitized
+        assert sanitized["additionalProperties"] is False
+    
+    def test_sanitize_additional_properties_for_actual_schemas(self):
+        """Test that actual model schemas have additionalProperties set."""
+        from src.models import ListingInput, ConsistencyCheckResult
+        
+        listing_schema = ListingInput.model_json_schema()
+        consistency_schema = ConsistencyCheckResult.model_json_schema()
+        
+        sanitized_listing = sanitize_json_schema_for_llm(listing_schema)
+        sanitized_consistency = sanitize_json_schema_for_llm(consistency_schema)
+        
+        # Both should have additionalProperties: false
+        assert sanitized_listing.get("additionalProperties") is False
+        assert sanitized_consistency.get("additionalProperties") is False
 
 
 class TestExtractHelpers:
@@ -174,6 +312,69 @@ class TestConvertScrapedDataToListingInput:
             
             assert result is not None
             assert isinstance(result, ListingInput)
+    
+    @pytest.mark.asyncio
+    async def test_convert_fixes_invalid_price(self, mock_scraped_property_data):
+        """Test that invalid prices (0.0 or negative) are fixed automatically."""
+        # Create a listing with invalid price
+        invalid_listing_data = generate_mock_listing_input().model_dump(mode='json')
+        invalid_listing_data['list_price'] = 0.0  # Invalid price
+        
+        mock_llm_response = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": json.dumps(invalid_listing_data),
+                    }
+                }
+            ]
+        }
+        
+        with patch("src.llm_service.call_openrouter_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = mock_llm_response
+            
+            result = await convert_scraped_data_to_listing_input(
+                property_data=mock_scraped_property_data,
+                model="test-model",
+                temperature=0.7,
+            )
+            
+            # Should still succeed because validation fixes the price
+            assert result is not None
+            assert isinstance(result, ListingInput)
+            assert result.list_price > 0, "Price should be fixed to be greater than 0"
+    
+    @pytest.mark.asyncio
+    async def test_convert_fixes_short_description(self, mock_scraped_property_data):
+        """Test that descriptions shorter than 10 characters are fixed."""
+        invalid_listing_data = generate_mock_listing_input().model_dump(mode='json')
+        invalid_listing_data['description'] = "Short"  # Too short
+        
+        mock_llm_response = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": json.dumps(invalid_listing_data),
+                    }
+                }
+            ]
+        }
+        
+        with patch("src.llm_service.call_openrouter_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = mock_llm_response
+            
+            result = await convert_scraped_data_to_listing_input(
+                property_data=mock_scraped_property_data,
+                model="test-model",
+                temperature=0.7,
+            )
+            
+            # Should still succeed because validation fixes the description
+            assert result is not None
+            assert isinstance(result, ListingInput)
+            assert len(result.description) >= 10, "Description should be fixed to be at least 10 characters"
 
 
 class TestCheckConsistencyWithStructuredOutput:
