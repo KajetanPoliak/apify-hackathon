@@ -187,6 +187,7 @@ class DistrictStats(BaseModel):
     priceChangePercent: float = Field(..., description="Year-over-year price change percentage")
     priceCategory: str = Field(..., description="Price category: premium, high, or medium")
     crimeStats: CrimeStats = Field(..., description="Crime statistics for 2025")
+    kebabIndex: float = Field(..., description="Normalized number (higher = better) of high-quality kebab restaurants in the district (rating > 4.5, reviews > 100)")
 
 
 class LocationInfo(BaseModel):
