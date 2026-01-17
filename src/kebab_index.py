@@ -9,7 +9,7 @@ load_dotenv()
 client = ApifyClient(os.getenv("APIFY_TOKEN"))
 
 # e. g.:  print(f"Kebab index: {calculate_kebab_index("Strašnice, Praha, Czech Republic")}")
-def calculate_kebab_index(address: str, max_places: int = 50, min_rating: float = 4.5, min_reviews: int = 100) -> dict:
+def calculate_kebab_index(address: str, max_places: int = 50, min_rating: float = 4.5, min_reviews: int = 100) -> int:
     """
     Calculate the kebab index for a given address.
     
