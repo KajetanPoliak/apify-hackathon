@@ -10,8 +10,8 @@ import os
 import re
 from typing import Any
 
-import aiohttp
 from dotenv import load_dotenv
+from openai import AsyncOpenAI
 
 from apify import Actor
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
@@ -57,87 +57,80 @@ def extract_property_details(soup: Any) -> dict[str, Any]:
 
 async def call_openrouter_llm(
     messages: list[dict[str, str]],
-    model: str = "google/gemini-2.0-flash-exp",
+    model: str = "openrouter/auto",
     temperature: float = 0.7,
 ) -> dict[str, Any] | None:
-    """Call OpenRouter actor to make LLM requests to Gemini models.
+    """Call OpenRouter actor to make LLM requests.
     
-    Uses APIFY_TOKEN from environment for authentication (automatically handled by Actor.call).
+    Uses OpenAI client with APIFY_TOKEN for authentication.
+    Works with both 'apify run' and direct Python execution.
     
     Args:
         messages: List of message dicts with 'role' and 'content' keys
-        model: Gemini model identifier (e.g., 'google/gemini-2.0-flash-exp')
+        model: Model identifier (e.g., 'openrouter/auto' or 'google/gemini-2.0-flash-exp')
         temperature: Sampling temperature (0.0-2.0)
     
     Returns:
         Response dict with 'choices' containing the LLM response, or None on error
     """
     try:
-        # Prepare input for OpenRouter actor
-        # Note: APIFY_TOKEN is automatically used by Actor.call() for authentication
-        openrouter_input = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-        }
+        # Get APIFY_TOKEN - use Actor's environment (works with apify run)
+        # Actor.get_env() provides environment variables when running with apify run
+        apify_token = None
+        try:
+            # Try to get from Actor environment first (works with apify run)
+            env = Actor.get_env()
+            apify_token = env.get("APIFY_TOKEN") if env else None
+        except Exception as e:
+            Actor.log.debug(f"Could not get APIFY_TOKEN from Actor.get_env(): {e}")
         
-        Actor.log.info(f"Calling OpenRouter actor with model: {model}")
+        # Fallback to os.getenv (works with direct python execution and .env file)
+        if not apify_token:
+            apify_token = os.getenv("APIFY_TOKEN")
         
-        # Call the OpenRouter actor
-        run = await Actor.call(
-            actor_id="apify/openrouter",
-            run_input=openrouter_input,
+        if not apify_token:
+            Actor.log.error("APIFY_TOKEN not found. Make sure it's set in your environment or .env file")
+            return None
+        
+        # Use OpenAI client with OpenRouter actor endpoint
+        # Base URL: https://openrouter.apify.actor/api/v1
+        # Token is passed in Authorization header
+        Actor.log.info(f"Calling OpenRouter actor via OpenAI client with model: {model}")
+        
+        # Initialize OpenAI client
+        # API key can be any non-empty string (not used, but required)
+        # Actual authentication is via APIFY_TOKEN in default_headers
+        client = AsyncOpenAI(
+            base_url="https://openrouter.apify.actor/api/v1",
+            api_key="no-key-required-but-must-not-be-empty",  # Any non-empty string works
+            default_headers={
+                "Authorization": f"Bearer {apify_token}",
+            },
+            timeout=300.0,  # 5 minute timeout
         )
         
-        if run is None:
-            Actor.log.error("Failed to start OpenRouter actor run")
-            return None
+        # Call the LLM using OpenAI chat completions API
+        completion = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+        )
         
-        # Actor.call returns an ActorRun object - access id attribute directly
-        run_id = run.id
-        Actor.log.info(f"OpenRouter actor run ID: {run_id}")
+        # Convert response to dict format (OpenAI response is already in the right format)
+        result = {
+            "choices": [
+                {
+                    "message": {
+                        "role": choice.message.role,
+                        "content": choice.message.content,
+                    }
+                }
+                for choice in completion.choices
+            ]
+        }
         
-        # Get the run client to check status and wait if needed
-        run_client = Actor.apify_client.run(run_id)
-        run_info = await run_client.get()
-        
-        # Wait for the run to finish if it's still running
-        if run_info.get("status") not in ["SUCCEEDED", "FAILED", "ABORTED"]:
-            Actor.log.info("Waiting for OpenRouter actor run to complete...")
-            await run_client.wait_for_finish(max_wait_secs=300)  # 5 minute timeout
-            run_info = await run_client.get()
-        
-        if run_info.get("status") != "SUCCEEDED":
-            Actor.log.error(f"OpenRouter actor run failed with status: {run_info.get('status')}")
-            return None
-        
-        # Try to get output from key-value store first (common pattern)
-        kvs_client = run_client.key_value_store()
-        output_record = await kvs_client.get_record("OUTPUT")
-        
-        if output_record and output_record.get("value"):
-            output_value = output_record["value"]
-            if isinstance(output_value, str):
-                try:
-                    output_value = json.loads(output_value)
-                except json.JSONDecodeError:
-                    # If it's not JSON, return as string
-                    pass
-            
-            Actor.log.info("Successfully received response from OpenRouter (KVS)")
-            return output_value
-        
-        # Fallback: try to get from dataset if available
-        dataset_client = run_client.dataset()
-        dataset_items = await dataset_client.list_items()
-        
-        if dataset_items and len(dataset_items.items) > 0:
-            # Return the first item or all items
-            Actor.log.info("Successfully received response from OpenRouter (Dataset)")
-            return dataset_items.items[0] if len(dataset_items.items) == 1 else dataset_items.items
-        
-        Actor.log.warning("No output found in OpenRouter actor run (checked KVS and dataset)")
-        return None
+        Actor.log.info("Successfully received response from OpenRouter")
+        return result
             
     except Exception as e:
         Actor.log.exception(f"Error calling OpenRouter actor: {e}")
@@ -146,19 +139,19 @@ async def call_openrouter_llm(
 
 async def analyze_property_with_llm(
     property_data: dict[str, Any],
-    model: str = "google/gemini-2.0-flash-exp",
+    model: str = "openrouter/auto",
     temperature: float = 0.7,
 ) -> dict[str, Any] | None:
     """Analyze a property listing using LLM.
     
     This is an example function showing how to use the OpenRouter integration
-    to analyze scraped property data with a Gemini model.
+    to analyze scraped property data with a model.
     
     Uses APIFY_TOKEN from environment for authentication.
     
     Args:
         property_data: Dictionary containing property information (title, description, price, etc.)
-        model: Gemini model to use
+        model: model to use
         temperature: LLM temperature
     
     Returns:
@@ -209,7 +202,7 @@ async def main() -> None:
         # LLM configuration
         skip_scraping = actor_input.get('skipScraping', False)
         use_llm = actor_input.get('useLLM', False)
-        gemini_model = actor_input.get('geminiModel', 'google/gemini-2.0-flash-exp')
+        llm_model = actor_input.get('llmModel', 'openrouter/auto')
         llm_temperature = actor_input.get('llmTemperature', 0.7)
         
         # If skipScraping is enabled, test LLM only
@@ -252,7 +245,7 @@ async def main() -> None:
             try:
                 llm_analysis = await analyze_property_with_llm(
                     property_data=sample_property,
-                    model=gemini_model,
+                    model=llm_model,
                     temperature=llm_temperature,
                 )
                 
@@ -281,7 +274,7 @@ async def main() -> None:
                         Actor.log.info('Test result pushed to dataset')
                     else:
                         Actor.log.warning('LLM response did not contain expected structure')
-                        Actor.log.info(f'Full response: {json.dumps(llm_analysis, indent=2)}')
+                        Actor.log.info(f'Full response: {json.dumps(llm_analysis, indent=2)[:500]}')
                 else:
                     Actor.log.error('LLM analysis returned no result')
                     
@@ -630,7 +623,7 @@ async def main() -> None:
                     Actor.log.info('Analyzing property with LLM...')
                     llm_analysis = await analyze_property_with_llm(
                         property_data=data,
-                        model=gemini_model,
+                        model=llm_model,
                         temperature=llm_temperature,
                     )
                     

@@ -48,15 +48,16 @@
     "useLLM": {
       "title": "Use LLM Analysis",
       "type": "boolean",
-      "description": "Enable LLM analysis of scraped property data using Gemini via OpenRouter (requires APIFY_TOKEN)",
+      "description": "Enable LLM analysis of scraped property data via OpenRouter (requires APIFY_TOKEN)",
       "default": false
     },
-    "geminiModel": {
-      "title": "Gemini Model",
+    "llmModel": {
+      "title": "LLM Model",
       "type": "string",
-      "description": "Gemini model to use for LLM requests",
-      "default": "google/gemini-2.0-flash-exp",
+      "description": "Model to use for LLM requests (openrouter/auto automatically selects the best model)",
+      "default": "openrouter/auto",
       "enum": [
+        "openrouter/auto",
         "google/gemini-2.0-flash-exp",
         "google/gemini-2.0-flash-thinking-exp",
         "google/gemini-1.5-pro",
@@ -64,6 +65,7 @@
         "google/gemini-pro"
       ],
       "enumTitles": [
+        "OpenRouter Auto (Recommended)",
         "Gemini 2.0 Flash (Experimental)",
         "Gemini 2.0 Flash Thinking (Experimental)",
         "Gemini 1.5 Pro",
