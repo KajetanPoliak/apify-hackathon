@@ -94,7 +94,7 @@ def sanitize_json_schema_for_llm(schema: dict[str, Any]) -> dict[str, Any]:
 async def call_openrouter_llm(
     messages: list[dict[str, str]],
     model: str = "openrouter/openai/gpt-5-mini",
-    temperature: float = 0.7,
+    temperature: float = 0.01,
     response_format: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Call OpenRouter actor to make LLM requests.
@@ -259,7 +259,7 @@ async def call_openrouter_llm(
 async def analyze_property_with_llm(
     property_data: dict[str, Any],
     model: str = "openrouter/openai/gpt-5-mini",
-    temperature: float = 0.7,
+    temperature: float = 0.01,
 ) -> dict[str, Any] | None:
     """Analyze a property listing using LLM.
     
@@ -317,7 +317,7 @@ Respond in JSON format with keys: summary, sellingPoints (array), concerns (arra
 async def check_consistency_with_llm(
     property_data: dict[str, Any],
     model: str = "openrouter/openai/gpt-5-mini",
-    temperature: float = 0.7,
+    temperature: float = 0.01,
 ) -> dict[str, Any] | None:
     """Check property listing consistency using LLM.
     
@@ -489,7 +489,7 @@ def parse_json_content(content: str | Any) -> dict[str, Any] | None:
 async def convert_scraped_data_to_listing_input(
     property_data: dict[str, Any],
     model: str = "openrouter/openai/gpt-5-mini",
-    temperature: float = 0.7,
+    temperature: float = 0.01,
 ) -> ListingInput | None:
     """Convert scraped property data to ListingInput format using structured outputs.
     
@@ -557,6 +557,30 @@ async def convert_scraped_data_to_listing_input(
     url = property_data.get('url', '')
     listing_id = generate_listing_id_from_url(url)
     
+    # Extract district statistics for summary and inclusion in ListingInput
+    district_stats = property_data.get('districtStats')
+    district_summary = ""
+    kebab_index = None
+    violent_crimes_rate = None
+    burglaries_rate = None
+    
+    if district_stats:
+        crime_stats = district_stats.get('crimeStats', {})
+        kebab_index = district_stats.get('kebabIndex')
+        violent_crimes_rate = crime_stats.get('violentCrimes')
+        burglaries_rate = crime_stats.get('burglaries')
+        
+        district_summary = f"""
+District Statistics (include these in ListingInput):
+- district_kebab_index: {kebab_index:.2f} (normalized, higher = better amenities/restaurants)
+- district_violent_crimes_rate: {violent_crimes_rate:.2f} (normalized, higher = worse)
+- district_burglaries_rate: {burglaries_rate:.2f} (normalized, higher = worse)
+- Average Price per m²: {district_stats.get('avgPricePerSqmCzk', 'N/A')} CZK
+- Price Category: {district_stats.get('priceCategory', 'N/A')}
+
+IMPORTANT: Include district_kebab_index, district_violent_crimes_rate, and district_burglaries_rate in the ListingInput output.
+"""
+    
     # Build prompt for conversion
     prompt = f"""Convert this scraped real estate listing data into a structured ListingInput format.
 
@@ -571,6 +595,7 @@ Scraped Data:
 - Property Details: {json.dumps(property_details, ensure_ascii=False)}
 - Attributes: {json.dumps(property_data.get('attributes', {}), ensure_ascii=False)}
 - Amenities: {json.dumps(property_data.get('amenities', []), ensure_ascii=False)}
+{district_summary}
 
 CRITICAL CONSTRAINTS - MUST FOLLOW:
 - list_price: MUST be greater than 0. Extract numeric value from price string (e.g., "8 499 000 Kč" -> 8499000.0). 
@@ -597,6 +622,7 @@ Instructions:
 6. Extract property_address from location or title
 7. Extract city from location
 8. Check amenities for features (has_garage, has_basement, etc.)
+9. Include district statistics if available (district_kebab_index, district_violent_crimes_rate, district_burglaries_rate)
 
 Return a complete ListingInput object with all fields properly filled and all constraints satisfied.
 """
@@ -655,6 +681,20 @@ Always return valid JSON matching the schema exactly with all constraints satisf
         listing_data = parse_json_content(content)
         if not listing_data:
             return None
+        
+        # Add district statistics to listing data if available (ensure they're included even if LLM didn't add them)
+        if district_stats:
+            crime_stats = district_stats.get('crimeStats', {})
+            # Always add if available, even if LLM didn't include them
+            if kebab_index is not None:
+                listing_data['district_kebab_index'] = float(kebab_index)
+                Actor.log.debug(f"Added district_kebab_index: {kebab_index:.2f}")
+            if violent_crimes_rate is not None:
+                listing_data['district_violent_crimes_rate'] = float(violent_crimes_rate)
+                Actor.log.debug(f"Added district_violent_crimes_rate: {violent_crimes_rate:.2f}")
+            if burglaries_rate is not None:
+                listing_data['district_burglaries_rate'] = float(burglaries_rate)
+                Actor.log.debug(f"Added district_burglaries_rate: {burglaries_rate:.2f}")
         
         # Validate and fix data before creating ListingInput
         # Fix list_price if invalid (must be > 0)
@@ -729,8 +769,9 @@ Always return valid JSON matching the schema exactly with all constraints satisf
 
 async def check_consistency_with_structured_output(
     listing_input: ListingInput,
+    district_stats: dict[str, Any] | None = None,
     model: str = "openrouter/openai/gpt-5-mini",
-    temperature: float = 0.7,
+    temperature: float = 0.01,
 ) -> ConsistencyCheckResult | None:
     """Check property listing consistency using structured outputs.
     
@@ -759,11 +800,30 @@ async def check_consistency_with_structured_output(
         "has_fireplace": listing_input.has_fireplace,
     }
     
+    # Add district statistics if available
+    district_info_section = ""
+    if district_stats:
+        crime_stats = district_stats.get('crimeStats', {})
+        kebab_index = district_stats.get('kebabIndex', 0)
+        violent_crimes = crime_stats.get('violentCrimes', 0)
+        burglaries = crime_stats.get('burglaries', 0)
+        
+        district_info_section = f"""
+
+DISTRICT STATISTICS (for fact-checking):
+- Kebab Index: {kebab_index:.2f} (normalized, higher = better amenities/restaurants)
+  Interpretation: >0.5 = good amenities, <0.3 = limited amenities
+- Violent Crimes Rate: {violent_crimes:.2f} (normalized, higher = worse)
+  Interpretation: >0.5 = higher crime, <0.3 = lower crime
+- Burglaries Rate: {burglaries:.2f} (normalized, higher = worse)
+  Interpretation: >0.5 = higher burglary risk, <0.3 = lower risk
+"""
+    
     prompt = f"""Analyze this real estate listing for inconsistencies between the description and structured data.
 
 STRUCTURED DATA:
 {json.dumps(listing_summary, indent=2, ensure_ascii=False)}
-
+{district_info_section}
 DESCRIPTION:
 {listing_input.description[:1000]}
 
@@ -774,6 +834,21 @@ TASK: Compare the description with the structured data. Find mismatches in:
 - Features (pool, garage, basement, fireplace)
 - Price
 - Year built
+
+MANDATORY FACT-CHECKS (you MUST perform these when district statistics are provided):
+1. AMENITIES FACT-CHECK (REQUIRED): 
+   - Check if description mentions: good amenities, restaurants, dining options, vibrant neighborhood, nearby dining, good food options, or similar claims
+   - Compare against kebab index:
+     * If kebab index < 0.3 and description claims good amenities → INCONSISTENCY (low amenities vs claims) - ADD TO FINDINGS
+     * If kebab index > 0.5 and description doesn't mention amenities → OK (data supports but not mentioned)
+   - This check is MANDATORY - you must look for amenities claims in the description
+
+2. SAFETY/CRIMINALITY FACT-CHECK (REQUIRED):
+   - Check if description mentions: calm, quiet, safe, peaceful area, low crime, secure neighborhood, low criminality, safe district, or similar safety claims
+   - Compare against crime rates:
+     * If violent crimes > 0.5 or burglaries > 0.5 and description claims calm/safe → INCONSISTENCY (high crime vs claims) - ADD TO FINDINGS
+     * If violent crimes < 0.3 and burglaries < 0.3 and description doesn't mention safety → OK (data supports but not mentioned)
+   - This check is MANDATORY - you must look for safety/calm claims in the description
 
 IMPORTANT: Return a COMPLETE, VALID JSON object. The JSON must include ALL fields:
 {{
@@ -793,8 +868,11 @@ IMPORTANT: Return a COMPLETE, VALID JSON object. The JSON must include ALL field
   "summary": "<one line>"
 }}
 
-CRITICAL: 
-- Keep findings array to MAX 10 items (most important ones only)
+CRITICAL REQUIREMENTS: 
+- MANDATORY: If district statistics are provided, you MUST check for amenities and safety claims in the description
+- MANDATORY: If description mentions amenities/restaurants and kebab index < 0.3, you MUST add an inconsistency finding
+- MANDATORY: If description mentions safety/calm and crime rates > 0.5, you MUST add an inconsistency finding
+- Keep findings array to MAX 10 items (most important ones only, but amenities and safety checks take priority)
 - Keep all text fields SHORT (max 200 chars for description_says/listing_data_says, max 300 for explanation)
 - Ensure the JSON is COMPLETE and VALID - do not truncate
 - If no inconsistencies found, return findings: [] and is_consistent: true
@@ -807,14 +885,28 @@ CRITICAL:
     messages = [
         {
             "role": "system",
-            "content": """You are a real estate data quality analyst. Your task is to identify inconsistencies between property descriptions and structured data.
+            "content": """You are a real estate data quality analyst. Your task is to identify inconsistencies between property descriptions and structured data, including MANDATORY fact-checking of amenities and safety claims against actual district statistics.
 
-IMPORTANT:
+CRITICAL REQUIREMENTS - YOU MUST:
+1. ALWAYS fact-check amenities claims: If description mentions good amenities, restaurants, dining options, vibrant neighborhood, or nearby dining, you MUST compare against kebab index:
+   - If kebab index < 0.3 and description claims good amenities → INCONSISTENCY (low amenities vs claims)
+   - If kebab index > 0.5 and description doesn't mention amenities → OK (data supports but not mentioned)
+   - This check is MANDATORY when district statistics are provided
+
+2. ALWAYS fact-check safety/criminality claims: If description mentions calm, quiet, safe, peaceful area, low crime, secure neighborhood, or low criminality, you MUST compare against crime rates:
+   - If violent crimes > 0.5 or burglaries > 0.5 and description claims calm/safe → INCONSISTENCY (high crime vs claims)
+   - If violent crimes < 0.3 and burglaries < 0.3 and description doesn't mention safety → OK (data supports but not mentioned)
+   - This check is MANDATORY when district statistics are provided
+
+3. Check other inconsistencies: Size/area, room counts, property type, features, price, year built
+
+OUTPUT REQUIREMENTS:
 - Return ONLY valid JSON matching the exact schema
-- Keep findings array concise (max 10 items)
-- Use severity levels: "critical", "medium", or "low"
+- Keep findings array concise (max 10 items, prioritize most important)
+- Use severity levels: "critical" for major contradictions, "medium" for notable issues, "low" for minor discrepancies
 - Ensure all required fields are present
-- The JSON must be complete and valid""",
+- The JSON must be complete and valid
+- If district statistics are provided, you MUST include findings for amenities and safety checks if claims are made in the description""",
         },
         {
             "role": "user",

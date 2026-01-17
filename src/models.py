@@ -105,6 +105,23 @@ class ListingInput(BaseModel):
     realtor_name: str | None = None
     realtor_agency: str | None = None
     listing_date: date | None = None
+    
+    # District statistics (for fact-checking amenities and safety claims)
+    district_kebab_index: float | None = Field(
+        None,
+        ge=0,
+        description="Normalized kebab index for the district (higher = better amenities/restaurants). Used to fact-check amenities claims in description."
+    )
+    district_violent_crimes_rate: float | None = Field(
+        None,
+        ge=0,
+        description="Normalized violent crimes rate for the district (higher = worse). Used to fact-check safety/calm claims in description."
+    )
+    district_burglaries_rate: float | None = Field(
+        None,
+        ge=0,
+        description="Normalized burglaries rate for the district (higher = worse). Used to fact-check safety/calm claims in description."
+    )
 
 
 class InconsistencyFinding(BaseModel):

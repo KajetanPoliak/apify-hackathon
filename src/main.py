@@ -113,8 +113,11 @@ async def process_property(
     if listing_input:
         try:
             Actor.log.info('Checking property consistency with structured outputs...')
+            # Pass district stats for fact-checking amenities and safety claims
+            district_stats = property_data.get('districtStats')
             consistency_result = await check_consistency_with_structured_output(
                 listing_input=listing_input,
+                district_stats=district_stats,
                 model=llm_model,
                 temperature=llm_temperature,
             )
@@ -214,7 +217,27 @@ async def main() -> None:
         else:
             llm_model = llm_model_input
             Actor.log.info(f'Using LLM model from input: {llm_model}')
-        llm_temperature = actor_input.get('llmTemperature', 0.7)
+        # Get LLM temperature from input, defaulting to 0.01
+        # Handle empty string, None, missing values, or legacy 0.7 value
+        llm_temperature_input = actor_input.get('llmTemperature')
+        if llm_temperature_input is None or llm_temperature_input == '':
+            llm_temperature = 0.01
+            Actor.log.info('No llmTemperature specified in input, using default: 0.01')
+        else:
+            # Convert to float and check for legacy 0.7 value
+            try:
+                temp_value = float(llm_temperature_input)
+                if temp_value == 0.7:
+                    # Override legacy 0.7 value to use new default
+                    llm_temperature = 0.01
+                    Actor.log.info('llmTemperature was set to 0.7 (legacy), overriding to default: 0.01')
+                else:
+                    llm_temperature = temp_value
+                    Actor.log.info(f'Using LLM temperature from input: {llm_temperature}')
+            except (ValueError, TypeError):
+                # Invalid value, use default
+                llm_temperature = 0.01
+                Actor.log.warning(f'Invalid llmTemperature value: {llm_temperature_input}, using default: 0.01')
         proxy_config = actor_input.get('proxyConfiguration', {'useApifyProxy': False})
         
         if not start_urls:

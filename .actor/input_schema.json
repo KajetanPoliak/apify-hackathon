@@ -90,7 +90,7 @@
       "title": "LLM Temperature",
       "type": "number",
       "description": "Temperature for LLM responses (0.0-2.0). Lower = more deterministic, higher = more creative",
-      "default": 0.7,
+      "default": 0.01,
       "minimum": 0.0,
       "maximum": 2.0
     }
