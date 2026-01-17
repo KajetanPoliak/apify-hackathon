@@ -127,20 +127,61 @@ prague_real_estate = {
     }
 }
 
+def get_multiplier(property: str) -> float:
+    """
+    Calculate a multiplier to normalize a property per capita.
+    
+    The multiplier scales the property values so that the maximum 
+    per-capita value across all districts equals 1.
+    
+    Args:
+        property: Name of the property field (e.g., 'kebab_index', 'crime_nasilna')
+    
+    Returns:
+        float: Multiplier value where max_value * multiplier = 1
+    """
+    max_ratio = 0.0
+    
+    # Go through all districts
+    for district_data in prague_real_estate.values():
+        property_value = district_data.get(property, 0)
+        population = district_data.get("population", 1)  # Avoid division by zero
+        
+        # Calculate per-capita ratio
+        ratio = property_value / population
+        
+        # Track maximum
+        if ratio > max_ratio:
+            max_ratio = ratio
+    
+    # Calculate multiplier such that max_ratio * multiplier = 1
+    if max_ratio > 0:
+        return 1.0 / max_ratio
+    else:
+        return 1.0  # Return 1.0 if no valid data
+
 
 def get_info(district_no: int) -> DistrictInfo:
     """Get real estate and crime information for a specific Prague district."""
     district_key = f"Prague {district_no}"
     district_data = prague_real_estate[district_key]
     
+    population = district_data["population"]
+    
+    # Calculate normalized values: (property / population) * multiplier
+    kebab_index_normalized = (district_data["kebab_index"] / population) * get_multiplier("kebab_index")
+    crime_nasilna_normalized = (district_data["crime_nasilna"] / population) * get_multiplier("crime_nasilna")
+    crime_kradeze_vloupanim_normalized = (district_data["crime_kradeze_vloupanim"] / population) * get_multiplier("crime_kradeze_vloupanim")
+    crime_pozary_normalized = (district_data["crime_pozary"] / population) * get_multiplier("crime_pozary")
+    
     return DistrictInfo(
         district_no=district_no,
         avg_price_per_sqm_czk=district_data["avg_price_per_sqm_czk"],
         price_change_percent=district_data["price_change_percent"],
         price_category=district_data["price_category"],
-        population=district_data["population"],
-        kebab_index=district_data["kebab_index"],
-        crime_nasilna=district_data["crime_nasilna"],
-        crime_kradeze_vloupanim=district_data["crime_kradeze_vloupanim"],
-        crime_pozary=district_data["crime_pozary"]
+        population=population,
+        kebab_index_normalized=kebab_index_normalized,
+        crime_nasilna_normalized=crime_nasilna_normalized,
+        crime_kradeze_vloupanim_normalized=crime_kradeze_vloupanim_normalized,
+        crime_pozary_normalized=crime_pozary_normalized
     )
