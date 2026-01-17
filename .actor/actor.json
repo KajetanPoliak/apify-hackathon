@@ -1,0 +1,15 @@
+{
+  "actorSpecification": 1,
+  "name": "apify-hackathon",
+  "version": "0.1",
+  "title": "Apify Hackathon Actor",
+  "description": "Python-based Apify Actor using uv for package management",
+  "dockerfileFile": "Dockerfile",
+  "readme": "README.md",
+  "storages": {
+    "dataset": "./output/dataset",
+    "keyValueStore": "./output/key_value_store",
+    "requestQueue": "./output/request_queue"
+  },
+  "environmentVariables": {}
+}

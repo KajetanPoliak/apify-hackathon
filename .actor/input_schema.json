@@ -1,0 +1,36 @@
+{
+  "title": "Actor Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Start URLs",
+      "type": "array",
+      "editor": "requestListSources",
+      "description": "List of URLs to start crawling from",
+      "default": [
+        {
+          "url": "https://example.com"
+        }
+      ]
+    },
+    "maxRequestsPerCrawl": {
+      "title": "Max Requests",
+      "type": "integer",
+      "description": "Maximum number of requests to process",
+      "default": 100,
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "proxyConfiguration": {
+      "title": "Proxy Configuration",
+      "type": "object",
+      "editor": "proxy",
+      "description": "Proxy settings for the actor",
+      "default": {
+        "useApifyProxy": false
+      }
+    }
+  },
+  "required": []
+}

@@ -41,3 +41,30 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+.uv/
+
+# Apify output
+output/
+
+# Python caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
