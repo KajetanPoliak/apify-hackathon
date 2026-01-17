@@ -12,6 +12,7 @@ class DistrictInfo(BaseModel):
     avg_price_per_sqm_czk: int = Field(..., description="Average price per square meter in CZK")
     price_change_percent: float = Field(..., description="Price change percentage")
     price_category: Literal["premium", "high", "medium"] = Field(..., description="Price category")
+    population: int = Field(..., description="Number of citizens in the district")
     crime_nasilna: int = Field(..., description="Violent crimes count")
     crime_kradeze_vloupanim: int = Field(..., description="Burglary crimes count")
     crime_pozary: int = Field(..., description="Fire incidents count")
