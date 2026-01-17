@@ -1,29 +1,70 @@
 {
-  "url": "https://www.sreality.cz/detail/pronajem/byt/4+1/praha-stare-mesto-martinska/3766952780",
-  "title": "Pronájem bytu 4+1 180 m² Martinská, Praha - Staré Město",
-  "description": "Klasický, prostorný, 3 ložnicový, nezařízený byt se 2 koupelnami k pronájmu, 4+1, 180m2, s úzkým balkonem. Byt je situovaný v 1. patře zrekonstruovaného secesního domu s výtahem. Budova se nachází na Starém Městě, pouze 2 minuty chůze k zastávce tramvaje a stanici metra Národní třída, v těsné blízkosti obchodního domu My s Tesco supermarketem a nákupního centra Quadrio, 5 minut chůze na Václavské náměstí a stanici metra Můstek, blízko obchodů, kaváren a restaurací a nedaleko nábřeží Vltavy i Staroměstského náměstí. Dispozice bytu: prostorná centrální vstupní hala, obývací pokoj, samostatná, plně vybavená kuchyň se spotřebiči, tři ložnice (jedna s malou šatnou), 2 koupelny (jedna s vanou, umyvadlem, toaletou a bidetem a una se sprchovým koutem, umyvadlem, toaletou a bidetem) a komora. Na podlaze jsou dubové parkety a dlažba. Domácí intercom, plynový kotel. Kauce: 2 měsíční nájemné. Nájemné: 55.000 Kč + fixní služby 900 Kč/osoba/měsíc + záloha na vodu 350 Kč/osoba/měsíc + poplatky (elektřina a plyn převod na nájemce) + provize RK.",
-  "price": "55 000 Kč/měsíc",
-  "location": "Praha - Staré Město",
+  "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha",
+  "propertyId": "974793",
+  "title": "Prodej bytu 3+kk 57 m², Hostýnská, Praha - Strašnice",
+  "category": "Prodej",
+  "description": "Nabízím k prodeji krásný byt o dispozici 3kk po rekonstrukci v osobním vlastnictví. Nemovitost se nachází v 2. podlaží zrevitalizovaného, panelového domu. Byt prodává přímo majitel, zájemce neplatí provizi. Rozloha bytu je 57 m2, k bytu náleží lodžie a sklep. Dispozici bytu tvoří dvě neprůchozí ložnice, velkorysý obývací pokoj spojený s kuchyní, prostorná koupelna se sprchovým koutem a samostatný záchod. Vytápění bytu je dálkové, ústřední. V okolí bytu naleznete veškerou občanskou vybavenost.",
+  "descriptionEnglish": "I am offering for sale a beautiful, privately owned, renovated 3-room apartment. The property is located on the 2nd floor of a revitalized panel building. The apartment is being sold directly by the owner, so there is no commission for interested parties. The apartment has an area of 57 m2 and includes a loggia and a cellar. The apartment has two separate bedrooms, a spacious living room connected to the kitchen, a spacious bathroom with a shower, and a separate toilet. The apartment has district heating. All civic amenities can be found in the vicinity of the apartment.",
+  "price": "8 499 000 Kč",
+  "priceType": "sale",
+  "location": {
+    "full": "Praha - Strašnice",
+    "city": "Praha",
+    "district": "Strašnice",
+    "street": "Hostýnská"
+  },
+  "propertyDetails": {
+    "propertyId": "974793",
+    "area": "57 m²",
+    "disposition": "3+kk",
+    "floor": "2. podlaží z 5",
+    "buildingType": "Panel",
+    "condition": "Velmi dobrý",
+    "ownership": "Osobní",
+    "furnished": "Částečně",
+    "energyRating": "C - Úsporná",
+    "availableFrom": "20. 12. 2025",
+    "pricePerM2": "149 105 Kč / m2"
+  },
   "attributes": {
-    "Cena": "55 000 Kč/měsíc",
-    "Poznámka k ceně": "+ služby 900 Kč/osoba/měsíc + voda 350 Kč/osoba/měsíc + elektřina a plyn, kauce 2 nájmy, provize RK",
-    "Příslušenství": "Výtah, Nezařízeno, Balkon",
-    "Energetická náročnost": "Mimořádně nehospodárná",
-    "Stavba": "Smíšená, Ve velmi dobrém stavu, 2. podlaží z 6",
-    "Infrastruktura": "230V",
-    "Plocha": "Užitná plocha 180 m², Celková plocha 180 m²",
+    "Dostupné od": "20. 12. 2025",
+    "Konstrukce budovy": "Panel",
+    "Vybaveno": "Částečně",
+    "Číslo inzerátu": "974793",
+    "PENB": "C - Úsporná",
+    "Užitná plocha": "57 m²",
+    "Cena za jednotku": "149 105 Kč / m2",
+    "Stav": "Velmi dobrý",
+    "Dispozice": "3+kk",
+    "Podlaží": "2. podlaží z 5",
     "Vlastnictví": "Osobní",
-    "Ostatní": "K nastěhování ihned",
-    "Zobrazeno": "6 002×",
-    "Vloženo": "27. 11. 2025",
-    "Upraveno": "17. 1. 2026",
-    "ID zakázky": "A10049"
+    "Umístění": "Klidná část"
   },
+  "features": [
+    "Částečně vybaveno",
+    "Sklep 2 m²",
+    "Lodžie 3 m²"
+  ],
+  "amenities": [
+    "Sklep 2 m²",
+    "Lodžie 3 m²",
+    "Internet"
+  ],
+  "images": [
+    "https://img.bezrealitky.cz/...",
+    "https://img.bezrealitky.cz/..."
+  ],
   "seller": {
-    "name": "Marcela Skalníková",
-    "phone": "+420 606 682 820",
-    "email": "info@primeproperty.cz"
+    "type": "owner",
+    "note": "Prodává přímo majitel - bez provize"
   },
-  "scrapedAt": "https://www.sreality.cz/detail/pronajem/byt/4+1/praha-stare-mesto-martinska/3766952780"
+  "breadcrumbs": [
+    "Domů",
+    "Výpis nemovitostí",
+    "Prodej",
+    "Byt",
+    "Praha",
+    "Praha-Strašnice"
+  ],
+  "scrapedAt": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
 }
-

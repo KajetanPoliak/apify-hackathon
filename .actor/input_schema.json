@@ -1,24 +1,27 @@
 {
-  "title": "Sreality Detail Scraper Input",
+  "title": "Bezrealitky Detail Scraper Input",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "startUrls": {
-      "title": "Sreality Detail URLs",
+      "title": "Bezrealitky Detail URLs",
       "type": "array",
       "editor": "requestListSources",
-      "description": "List of Sreality.cz detail page URLs to scrape (e.g., https://www.sreality.cz/detail/...)",
+      "description": "List of Bezrealitky.cz detail page URLs to scrape (e.g., https://www.bezrealitky.cz/nemovitosti-byty-domy/...)",
       "default": [
         {
-          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/velvary-velvary-tyrsova/2882372428"
+          "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
         }
       ],
       "prefill": [
         {
-          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/velvary-velvary-tyrsova/2882372428"
+          "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
         },
         {
-          "url": "https://www.sreality.cz/detail/prodej/byt/4+kk/praha-smichov-vltavska/3683189580"
+          "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/981201-nabidka-prodej-bytu-pocernicka-praha"
+        },
+        {
+          "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/981586-nabidka-prodej-bytu-vratislavska-praha"
         }
       ]
     },

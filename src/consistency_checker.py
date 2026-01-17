@@ -35,7 +35,14 @@ async def check_property_consistency(
     description = property_data.get('description')
     price = property_data.get('price')
     location = property_data.get('location')
-    property_address = location or title or url
+    
+    # Handle location - can be dict with 'full' key or string
+    if isinstance(location, dict):
+        property_address = location.get('full') or title or url
+    elif isinstance(location, str):
+        property_address = location or title or url
+    else:
+        property_address = title or url
     
     # Try to use LLM for consistency checking
     try:

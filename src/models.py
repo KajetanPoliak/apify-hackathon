@@ -96,23 +96,52 @@ class ConsistencyCheckResult(BaseModel):
     summary: str = Field(..., description="One-line summary of the check")
 
 
-# Sreality.cz Scraper Models
+# Bezrealitky.cz Scraper Models
+
+class LocationInfo(BaseModel):
+    """Structured location information"""
+    
+    city: str | None = Field(None, description="City (e.g., Praha, Brno)")
+    district: str | None = Field(None, description="District/neighborhood (e.g., Karlín, Malešice, Strašnice)")
+    street: str | None = Field(None, description="Street name (e.g., Sokolovská, Počernická)")
+    full: str | None = Field(None, description="Full location string (e.g., Praha - Strašnice)")
+
+
+class PropertyInfo(BaseModel):
+    """Core property specifications"""
+    
+    area: str | None = Field(None, description="Usable area (e.g., 57 m², 60 m²)")
+    disposition: str | None = Field(None, description="Layout/proportions (e.g., 3+kk, 2+1, 4+1)")
+    floor: str | None = Field(None, description="Floor information (e.g., 2. podlaží z 5)")
+    buildingType: str | None = Field(None, description="Building construction type (e.g., Panel, Brick)")
+    condition: str | None = Field(None, description="Property condition (e.g., Velmi dobrý)")
+    ownership: str | None = Field(None, description="Ownership type (e.g., Osobní)")
+    furnished: str | None = Field(None, description="Furnished status (e.g., Částečně, Ano, Ne)")
+    energyRating: str | None = Field(None, description="Energy efficiency rating (e.g., C - Úsporná)")
+    availableFrom: str | None = Field(None, description="Available from date")
+    pricePerM2: str | None = Field(None, description="Price per square meter")
+
 
 class SellerInfo(BaseModel):
     """Information about the property seller/agent"""
     
+    type: str | None = Field(None, description="Seller type: 'owner' or 'agent'")
+    note: str | None = Field(None, description="Additional notes (e.g., 'bez provize')")
     name: str | None = Field(None, description="Seller or agent name")
     phone: str | None = Field(None, description="Contact phone number")
     email: str | None = Field(None, description="Contact email address")
 
 
 class ScrapeOutput(BaseModel):
-    """Output model for scraped Sreality.cz property listing data"""
+    """Output model for scraped Bezrealitky.cz property listing data"""
     
     # Core information
     url: str = Field(..., description="URL of the scraped listing")
+    propertyId: str | None = Field(None, description="Unique property listing ID")
     title: str | None = Field(None, description="Property listing title")
-    description: str | None = Field(None, description="Full property description text")
+    category: str | None = Field(None, description="Listing category (Prodej or Pronájem)")
+    description: str | None = Field(None, description="Full property description in Czech")
+    descriptionEnglish: str | None = Field(None, description="Property description in English (if available)")
     
     # Pricing
     price: str | None = Field(None, description="Property price (formatted with currency)")
@@ -121,13 +150,40 @@ class ScrapeOutput(BaseModel):
         description="Type of listing: 'rental' for rent, 'sale' for purchase"
     )
     
-    # Location
-    location: str | None = Field(None, description="Property location (city, district)")
+    # Location - ALWAYS EXTRACT THESE FIELDS
+    location: LocationInfo = Field(
+        default_factory=LocationInfo,
+        description="Structured location information with city, district, and street"
+    )
     
-    # Property details
+    # Property specifications - ALWAYS EXTRACT THESE FIELDS
+    propertyDetails: PropertyInfo = Field(
+        default_factory=PropertyInfo,
+        description="Core property specifications including area and disposition"
+    )
+    
+    # Additional information
+    features: list[str] = Field(
+        default_factory=list,
+        description="Key property features and highlights"
+    )
+    amenities: list[str] = Field(
+        default_factory=list,
+        description="Available amenities (cellar, loggia, parking, etc.)"
+    )
+    images: list[str] = Field(
+        default_factory=list,
+        description="URLs of property images"
+    )
+    breadcrumbs: list[str] = Field(
+        default_factory=list,
+        description="Navigation breadcrumbs for categorization"
+    )
+    
+    # Raw attributes
     attributes: dict[str, str] = Field(
         default_factory=dict,
-        description="Dictionary of property attributes (area, energy rating, features, etc.)"
+        description="Dictionary of all raw property attributes"
     )
     
     # Contact information
@@ -142,22 +198,42 @@ class ScrapeOutput(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "url": "https://www.sreality.cz/detail/prodej/byt/3+kk/praha-zizkov-borivojova/1241056076",
-                "title": "Prodej bytu 3+kk 81 m² Bořivojova, Praha - Žižkov",
-                "description": "Novostavba podkrovního bytu o celkové ploše 81,8 m²...",
-                "price": "17 895 000 Kč",
+                "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha",
+                "propertyId": "974793",
+                "title": "Prodej bytu 3+kk 57 m², Hostýnská, Praha - Strašnice",
+                "category": "Prodej",
+                "description": "Nabízím k prodeji krásný byt o dispozici 3kk po rekonstrukci v osobním vlastnictví...",
+                "descriptionEnglish": "I am offering for sale a beautiful 3-room apartment...",
+                "price": "8 499 000 Kč",
                 "priceType": "sale",
-                "location": "Praha - Žižkov",
+                "location": {
+                    "city": "Praha",
+                    "district": "Strašnice",
+                    "street": "Hostýnská",
+                    "full": "Praha - Strašnice"
+                },
+                "propertyDetails": {
+                    "area": "57 m²",
+                    "disposition": "3+kk",
+                    "floor": "2. podlaží z 5",
+                    "buildingType": "Panel",
+                    "condition": "Velmi dobrý",
+                    "energyRating": "C - Úsporná",
+                    "pricePerM2": "149 105 Kč / m2"
+                },
+                "features": ["Částečně vybaveno", "Sklep 2 m²", "Lodžie 3 m²"],
+                "amenities": ["Sklep 2 m²", "Lodžie 3 m²", "Internet"],
+                "images": ["https://img.bezrealitky.cz/..."],
                 "attributes": {
-                    "Celková cena": "17 895 000 Kč",
-                    "Plocha": "Užitná plocha 81 m²",
-                    "Energetická náročnost": "Úsporná"
+                    "Dostupné od": "20. 12. 2025",
+                    "Konstrukce budovy": "Panel",
+                    "Užitná plocha": "57 m²"
                 },
                 "seller": {
-                    "name": "Petr Hnátek",
-                    "phone": "+420 602 442 500",
-                    "email": "hnatek@stavba-design.cz"
+                    "type": "owner",
+                    "note": "Prodává přímo majitel - bez provize"
                 },
-                "scrapedAt": "https://www.sreality.cz/detail/prodej/byt/3+kk/praha-zizkov-borivojova/1241056076"
+                "breadcrumbs": ["Domů", "Prodej", "Byt", "Praha"],
+                "scrapedAt": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
             }
         }

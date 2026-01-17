@@ -3,3 +3,6 @@
 
 apify < 4.0.0
 crawlee[playwright]
+beautifulsoup4
+openai
+pydantic

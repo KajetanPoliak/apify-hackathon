@@ -1,6 +1,6 @@
-"""Sreality.cz Detail Page Scraper.
+"""Bezrealitky.cz Detail Page Scraper.
 
-This Actor scrapes detailed information from Sreality.cz property listing pages,
+This Actor scrapes detailed information from Bezrealitky.cz property listing pages,
 analyzes them with LLM, and checks for consistency issues.
 """
 
@@ -40,9 +40,9 @@ async def process_property(
     # Step 1: Scrape property data
     try:
         await page.wait_for_load_state('domcontentloaded', timeout=15000)
-        await page.wait_for_timeout(3000)
+        await page.wait_for_timeout(2000)
         
-        # Handle consent page if present
+        # Handle consent page if present (Bezrealitky typically doesn't have one)
         await handle_consent_page(page, url, crawler_config)
         
         # Wait for property content
@@ -113,7 +113,7 @@ async def process_property(
         Actor.log.warning('Consistency check failed, outputting mock inconsistency results')
         mock_result = generate_mock_result_for_property(
             url=url,
-            property_address=property_data.get('location') or property_data.get('title') or url,
+            property_address=property_data.get('location', {}).get('full') or property_data.get('title') or url,
             title=property_data.get('title'),
             description=property_data.get('description'),
             price=property_data.get('price'),
@@ -128,7 +128,7 @@ async def process_property(
 
 
 async def main() -> None:
-    """Main entry point for the Sreality scraper Actor."""
+    """Main entry point for the Bezrealitky scraper Actor."""
     async with Actor:
         # Get Actor input
         actor_input = await Actor.get_input() or {}
@@ -138,7 +138,11 @@ async def main() -> None:
             url.get('url')
             for url in actor_input.get(
                 'startUrls',
-                [{'url': 'https://www.sreality.cz/detail/prodej/dum/rodinny/velvary-velvary-tyrsova/2882372428'}],
+                [
+                    {'url': 'https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha'},
+                    {'url': 'https://www.bezrealitky.cz/nemovitosti-byty-domy/981201-nabidka-prodej-bytu-pocernicka-praha'},
+                    {'url': 'https://www.bezrealitky.cz/nemovitosti-byty-domy/981586-nabidka-prodej-bytu-vratislavska-praha'},
+                ],
             )
         ]
         
@@ -152,13 +156,13 @@ async def main() -> None:
             await Actor.exit()
             return
         
-        Actor.log.info(f'Starting Sreality scraper with {len(start_urls)} URLs')
+        Actor.log.info(f'Starting Bezrealitky scraper with {len(start_urls)} URLs')
         Actor.log.info('Processing: Scraping → LLM Analysis → Consistency Check')
         
         # Create crawler configuration
         crawler_config = {
             'max_requests_per_crawl': max_requests,
-            'headless': False,
+            'headless': True,
             'browser_type': 'chromium',
             'max_request_retries': 3,
         }
@@ -171,7 +175,7 @@ async def main() -> None:
         
         @crawler.router.default_handler
         async def request_handler(context: PlaywrightCrawlingContext) -> None:
-            """Handle each Sreality detail page request."""
+            """Handle each Bezrealitky detail page request."""
             try:
                 await process_property(
                     context=context,

@@ -23,7 +23,10 @@ Edit `storage/key_value_stores/default/INPUT.json`:
 {
   "startUrls": [
     {
-      "url": "https://www.sreality.cz/detail/pronajem/byt/4+1/praha-stare-mesto-martinska/3766952780"
+      "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
+    },
+    {
+      "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/981201-nabidka-prodej-bytu-pocernicka-praha"
     }
   ],
   "maxRequestsPerCrawl": 10
@@ -42,22 +45,41 @@ Results are saved in `storage/datasets/default/000000001.json`
 
 ## Sample Output
 
+The scraper now extracts 30+ data points for comprehensive property analysis:
+
 ```json
 {
-  "url": "https://www.sreality.cz/detail/pronajem/byt/4+1/praha-stare-mesto-martinska/3766952780",
-  "title": "Pronájem bytu 4+1 180 m² Martinská, Praha - Staré Město",
-  "description": "Klasický, prostorný, 3 ložnicový, nezařízený byt se 2 koupelnami k pronájmu...",
-  "price": "55 000 Kč/měsíc",
-  "location": "Praha - Staré Město",
-  "attributes": {
-    "Plocha": "Užitná plocha 180 m²",
-    "Energetická náročnost": "Mimořádně nehospodárná",
-    "Stavba": "Smíšená, Ve velmi dobrém stavu, 2. podlaží z 6"
+  "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha",
+  "propertyId": "974793",
+  "title": "Prodej bytu 3+kk 57 m², Hostýnská, Praha - Strašnice",
+  "category": "Prodej",
+  "description": "Nabízím k prodeji krásný byt o dispozici 3kk po rekonstrukci...",
+  "descriptionEnglish": "I am offering for sale a beautiful 3-room apartment...",
+  "price": "8 499 000 Kč",
+  "priceType": "sale",
+  "location": {
+    "full": "Praha - Strašnice",
+    "city": "Praha",
+    "district": "Strašnice",
+    "street": "Hostýnská"
   },
+  "propertyDetails": {
+    "area": "57 m²",
+    "disposition": "3+kk",
+    "floor": "2. podlaží z 5",
+    "buildingType": "Panel",
+    "condition": "Velmi dobrý",
+    "energyRating": "C - Úsporná",
+    "pricePerM2": "149 105 Kč / m2"
+  },
+  "features": ["Částečně vybaveno", "Sklep 2 m²", "Lodžie 3 m²"],
+  "amenities": ["Sklep 2 m²", "Lodžie 3 m²", "Internet"],
+  "images": ["https://img.bezrealitky.cz/..."],
   "seller": {
-    "phone": "+420 606 682 820",
-    "email": "info@primeproperty.cz"
-  }
+    "type": "owner",
+    "note": "Prodává přímo majitel - bez provize"
+  },
+  "breadcrumbs": ["Domů", "Prodej", "Byt", "Praha"]
 }
 ```
 
@@ -79,14 +101,13 @@ apify push
    - Make sure you've activated the virtual environment: `source .venv/bin/activate`
    - Reinstall dependencies: `pip install -r requirements.txt`
 
-2. **Consent page blocking**
-   - This is expected due to anti-bot protection
-   - Try using Apify Proxy (set `useApifyProxy: true`)
-   - Add delays between requests
-
-3. **Missing description**
+2. **Missing description**
    - Some listings may have minimal descriptions
    - Check the `attributes` field for additional details
+
+3. **Page loading issues**
+   - Try using Apify Proxy (set `useApifyProxy: true`)
+   - Increase timeout values if needed
 
 ## Tips for Best Results
 

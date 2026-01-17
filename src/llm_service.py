@@ -99,13 +99,20 @@ async def analyze_property_with_llm(
     Returns:
         Analysis result from LLM, or None on error
     """
+    # Format location - can be dict with 'full' key or string
+    location = property_data.get('location', 'N/A')
+    if isinstance(location, dict):
+        location_str = location.get('full') or location.get('city') or str(location)
+    else:
+        location_str = location or 'N/A'
+    
     # Build prompt for property analysis
     prompt = f"""Analyze this real estate listing and provide insights:
 
 Title: {property_data.get('title', 'N/A')}
 Description: {property_data.get('description', 'N/A')}
 Price: {property_data.get('price', 'N/A')}
-Location: {property_data.get('location', 'N/A')}
+Location: {location_str}
 Attributes: {json.dumps(property_data.get('attributes', {}), ensure_ascii=False)}
 
 Please provide:

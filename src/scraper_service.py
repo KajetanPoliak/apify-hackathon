@@ -1,4 +1,4 @@
-"""Scraper service for Sreality.cz property listings."""
+"""Scraper service for Bezrealitky.cz property listings."""
 
 import re
 from typing import Any
@@ -15,31 +15,24 @@ def clean_text(text: str | None) -> str | None:
 
 
 def extract_property_details(soup: Any) -> dict[str, Any]:
-    """Extract all property details from the listing page."""
+    """Extract property details from Bezrealitky.cz listing page."""
     details = {}
     
-    # Try to find price
-    price_elem = soup.find(text=re.compile(r'Kč/měsíc|Kč'))
-    if price_elem:
-        details['price'] = clean_text(price_elem.strip())
-    
-    # Extract structured data from the page
-    # Look for key-value pairs in the property details section
-    for item in soup.find_all(['div', 'span', 'p']):
-        text = item.get_text(strip=True)
-        if ':' in text:
-            parts = text.split(':', 1)
-            if len(parts) == 2:
-                key = clean_text(parts[0])
-                value = clean_text(parts[1])
-                if key and value and len(key) < 50:  # Avoid very long keys
-                    details[key] = value
+    # Bezrealitky uses table format for property parameters
+    # Look for key-value pairs in table rows
+    for row in soup.find_all('tr'):
+        cells = row.find_all('td')
+        if len(cells) == 2:
+            key = clean_text(cells[0].get_text())
+            value = clean_text(cells[1].get_text())
+            if key and value:
+                details[key] = value
     
     return details
 
 
 async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
-    """Extract property data from a Sreality.cz page.
+    """Extract property data from a Bezrealitky.cz page.
     
     Args:
         page: Playwright page object
@@ -48,76 +41,82 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
     Returns:
         Dictionary containing extracted property data
     """
+    # Get page content once for parsing
+    page_content = await page.content()
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(page_content, 'html.parser')
+    
     # Extract main title (h1)
     title = None
     try:
-        title_elem = await page.query_selector('h1')
+        title_elem = soup.find('h1')
         if title_elem:
-            title = clean_text(await title_elem.text_content())
+            title = clean_text(title_elem.get_text())
+            Actor.log.info(f'Found title: {title}')
     except Exception as e:
         Actor.log.debug(f'Error extracting title: {e}')
     
-    # Extract price (handles both rental and sale prices)
-    price = None
-    price_type = None
+    # Extract property ID from URL
+    property_id = None
     try:
-        page_text = await page.content()
+        id_match = re.search(r'/(\d+)-', url)
+        if id_match:
+            property_id = id_match.group(1)
+            Actor.log.info(f'Found property ID: {property_id}')
+    except Exception as e:
+        Actor.log.debug(f'Error extracting property ID: {e}')
+    
+    # Extract price
+    price = None
+    price_per_m2 = None
+    price_type = 'sale'
+    try:
+        price_match = re.search(r'(\d+[\s​]+\d+[\s​]+\d+\s*Kč)', page_content)
+        if price_match:
+            price = clean_text(price_match.group(1))
+            Actor.log.info(f'Found price: {price}')
         
-        # Try rental price first
-        rental_match = re.search(r'(\d+[\s​]*\d*[\s​]*\d*[\s​]*K[čc]/měsíc)', page_text)
-        if rental_match:
-            price = clean_text(rental_match.group(1))
-            price_type = 'rental'
-        else:
-            # Try sale price
-            sale_match = re.search(r'(\d+(?:[\s​]*\d+)*[\s​]*K[čc])', page_text)
-            if sale_match:
-                raw_price = sale_match.group(1)
-                digits_only = re.sub(r'[^\d]', '', raw_price)
-                if len(digits_only) >= 6:
-                    price = clean_text(raw_price)
-                    price_type = 'sale'
-        
-        # Fallback: find price element visually
-        if not price:
-            price_candidates = await page.query_selector_all('span, div, p')
-            for elem in price_candidates[:100]:
-                try:
-                    text = await elem.text_content()
-                    if text:
-                        text = text.strip()
-                        if re.match(r'^\d+\s*Kč/měsíc$', text):
-                            price = clean_text(text)
-                            price_type = 'rental'
-                            break
-                        elif re.match(r'^\d+[\s​]*\d+[\s​]*\d+\s*Kč$', text):
-                            price = clean_text(text)
-                            price_type = 'sale'
-                            break
-                except:
-                    continue
-        
-        if price:
-            Actor.log.info(f'Found {price_type} price: {price}')
-            
+        price_per_m2_match = re.search(r'([\d\s​]+Kč\s*/\s*m2)', page_content)
+        if price_per_m2_match:
+            price_per_m2 = clean_text(price_per_m2_match.group(1))
+            Actor.log.info(f'Found price per m²: {price_per_m2}')
     except Exception as e:
         Actor.log.debug(f'Error extracting price: {e}')
     
+    # Extract breadcrumbs and category
+    breadcrumbs = []
+    category = None
+    try:
+        breadcrumb_items = soup.find_all('li', recursive=True)
+        for item in breadcrumb_items:
+            text = clean_text(item.get_text())
+            if text and len(text) < 50 and text not in breadcrumbs:
+                breadcrumbs.append(text)
+        
+        if 'Prodej' in page_content:
+            category = 'Prodej'
+        elif 'Pronájem' in page_content:
+            category = 'Pronájem'
+            price_type = 'rental'
+        
+        if breadcrumbs:
+            Actor.log.info(f'Found breadcrumbs: {breadcrumbs[:5]}')
+    except Exception as e:
+        Actor.log.debug(f'Error extracting breadcrumbs: {e}')
+    
     # Extract description
     description = None
+    description_english = None
     try:
+        paragraphs = soup.find_all('p')
         desc_candidates = []
-        all_text_blocks = await page.query_selector_all('p, div[class*="description"], section')
         
-        for block in all_text_blocks:
+        for p in paragraphs:
             try:
-                text = await block.text_content()
-                if text:
-                    text = clean_text(text)
-                    if (len(text) > 150 and len(text) < 5000 and
-                        not any(skip in text.lower() for skip in 
-                               ['seznam.cz, a.s.', 'cookies', 'souhlas', 'ochrana údajů', 
-                                'smluvní podmínky', 'jakékoliv užití obsahu'])):
+                text = clean_text(p.get_text())
+                if text and len(text) > 100 and len(text) < 2000:
+                    if not any(skip in text.lower() for skip in 
+                             ['cookies', 'soukromí', 'podmínky', '© 20', 'seznam.cz']):
                         desc_candidates.append(text)
             except:
                 continue
@@ -125,88 +124,240 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
         if desc_candidates:
             description = max(desc_candidates, key=len)
             Actor.log.info(f'Found description: {len(description)} characters')
-        else:
-            paragraphs = await page.query_selector_all('p')
-            text_parts = []
-            for p in paragraphs[:20]:
-                text = clean_text(await p.text_content())
-                if text and len(text) > 50 and len(text) < 1000:
-                    if not any(skip in text.lower() for skip in ['seznam.cz', 'cookies']):
-                        text_parts.append(text)
             
-            if text_parts:
-                description = text_parts[0] if text_parts else None
-                            
+            # Try to find English translation
+            if len(desc_candidates) > 1:
+                for desc in desc_candidates:
+                    if any(eng in desc[:50] for eng in ['I am', 'The apartment', 'The property']):
+                        description_english = desc
+                        Actor.log.info('Found English description')
+                        break
     except Exception as e:
         Actor.log.debug(f'Error extracting description: {e}')
+    
+    # Extract subtitle features
+    subtitle_features = []
+    try:
+        all_text = soup.get_text()
+        features_match = re.findall(r'([^•\n]+•[^•\n]+)', all_text)
+        if features_match:
+            for feature_line in features_match[:3]:
+                features = [clean_text(f) for f in feature_line.split('•')]
+                subtitle_features.extend([f for f in features if f and len(f) < 50])
+        
+        if subtitle_features:
+            Actor.log.info(f'Found subtitle features: {subtitle_features[:5]}')
+    except Exception as e:
+        Actor.log.debug(f'Error extracting subtitle features: {e}')
     
     # Extract attributes
     attributes = {}
     try:
-        page_content = await page.content()
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(page_content, 'html.parser')
         attributes = extract_property_details(soup)
-        
-        # If price wasn't found, try to get it from attributes
-        if attributes and not price or (price and len(re.sub(r'[^\d]', '', price)) < 6):
-            if 'Celková cena' in attributes:
-                price = clean_text(attributes['Celková cena'])
-                price_type = 'sale'
-                Actor.log.info(f'Corrected price from attributes: {price}')
+        Actor.log.info(f'Found {len(attributes)} property attributes')
     except Exception as e:
         Actor.log.debug(f'Error extracting attributes: {e}')
     
-    # Extract location from title
-    location_parts = []
-    if title:
-        location_match = re.search(r'Praha[^,]*|Brno[^,]*', title)
-        if location_match:
-            location_parts.append(clean_text(location_match.group()))
-    
-    # Extract seller information
-    seller_name = None
-    seller_phone = None
-    seller_email = None
+    # Extract critical structured data
+    property_details = {}
+    area = None
+    disposition = None
     
     try:
-        page_content = await page.content()
-        phone_match = re.search(r'\+\d{3}\s*\d{3}\s*\d{3}\s*\d{3}', page_content)
+        # Extract area
+        area = attributes.get('Užitná plocha')
+        
+        if not area and title:
+            area_match = re.search(r'(\d+\s*m²)', title)
+            if area_match:
+                area = clean_text(area_match.group(1))
+                Actor.log.info(f'✓ Extracted area from title: {area}')
+        
+        if not area:
+            all_text = soup.get_text()
+            area_match = re.search(r'Užitná plocha[:\s]+(\d+\s*m²)', all_text)
+            if area_match:
+                area = clean_text(area_match.group(1))
+                Actor.log.info(f'✓ Extracted area from content: {area}')
+        
+        # Extract disposition
+        disposition = attributes.get('Dispozice')
+        
+        if not disposition and title:
+            disposition_match = re.search(r'\b(\d+\+(?:kk|1))\b', title, re.IGNORECASE)
+            if disposition_match:
+                disposition = disposition_match.group(1)
+                Actor.log.info(f'✓ Extracted disposition from title: {disposition}')
+        
+        if not disposition:
+            all_text = soup.get_text()
+            disposition_match = re.search(r'Dispozice[:\s]+(\d+\+(?:kk|1))', all_text, re.IGNORECASE)
+            if disposition_match:
+                disposition = disposition_match.group(1)
+                Actor.log.info(f'✓ Extracted disposition from content: {disposition}')
+        
+        # Build property details
+        property_details['propertyId'] = property_id or attributes.get('Číslo inzerátu')
+        property_details['area'] = area
+        property_details['disposition'] = disposition
+        property_details['floor'] = attributes.get('Podlaží')
+        property_details['buildingType'] = attributes.get('Konstrukce budovy')
+        property_details['condition'] = attributes.get('Stav')
+        property_details['ownership'] = attributes.get('Vlastnictví')
+        property_details['furnished'] = attributes.get('Vybaveno')
+        property_details['energyRating'] = attributes.get('PENB')
+        property_details['availableFrom'] = attributes.get('Dostupné od')
+        property_details['pricePerM2'] = price_per_m2 or attributes.get('Cena za jednotku')
+        
+        property_details = {k: v for k, v in property_details.items() if v}
+        
+        if property_details:
+            Actor.log.info(f'✓ Extracted {len(property_details)} structured property details')
+    except Exception as e:
+        Actor.log.error(f'Error structuring property details: {e}')
+    
+    # Extract amenities
+    amenities = []
+    try:
+        all_text = soup.get_text()
+        amenity_keywords = [
+            'Sklep', 'Lodžie', 'Balkon', 'Terasa', 'Zahrada', 
+            'Parkování', 'Garáž', 'Internet', 'Výtah', 'Bazén'
+        ]
+        
+        for keyword in amenity_keywords:
+            amenity_match = re.search(rf'{keyword}(?:\s+(\d+\s*m²))?', all_text, re.IGNORECASE)
+            if amenity_match:
+                if amenity_match.group(1):
+                    amenities.append(f"{keyword} {amenity_match.group(1)}")
+                else:
+                    amenities.append(keyword)
+        
+        if amenities:
+            Actor.log.info(f'Found amenities: {amenities}')
+    except Exception as e:
+        Actor.log.debug(f'Error extracting amenities: {e}')
+    
+    # Extract location details
+    location = None
+    street = None
+    district = None
+    city = None
+    
+    try:
+        if title:
+            # Extract city and district from title
+            city_district_match = re.search(
+                r',\s*(Praha|Brno|Ostrava|Plzeň|Liberec|Olomouc|Ústí nad Labem|Hradec Králové|České Budějovice|Pardubice|Zlín|Havířov|Kladno|Most|Opava|Frýdek-Místek|Karviná|Jihlava|Teplice|Děčín|Karlovy Vary|Chomutov|Jablonec nad Nisou|Mladá Boleslav|Prostějov|Přerov)\s*[-–]\s*([^,]+?)$',
+                title,
+                re.IGNORECASE
+            )
+            
+            if city_district_match:
+                city = clean_text(city_district_match.group(1))
+                district = clean_text(city_district_match.group(2))
+                Actor.log.info(f'✓ Found city: {city}, district: {district}')
+                
+                # Extract street
+                street_pattern = rf'(?:m²|realitky)\s*([^,]+?),\s*{re.escape(city)}'
+                street_match = re.search(street_pattern, title, re.IGNORECASE)
+                if street_match:
+                    street = clean_text(street_match.group(1))
+                    Actor.log.info(f'✓ Found street: {street}')
+            else:
+                # Fallback: city only
+                city_only_match = re.search(r',\s*(Praha|Brno|Ostrava|Plzeň|Liberec|Olomouc)(?:\s|$)', title, re.IGNORECASE)
+                if city_only_match:
+                    city = clean_text(city_only_match.group(1))
+                    Actor.log.info(f'✓ Found city: {city}')
+        
+        # Build location
+        if city and district:
+            location = f"{city} - {district}"
+        elif city:
+            location = city
+    except Exception as e:
+        Actor.log.error(f'Error extracting location: {e}')
+    
+    # Extract images
+    images = []
+    try:
+        img_elements = soup.find_all('img', src=True)
+        for img in img_elements:
+            src = img.get('src', '')
+            if any(pattern in src for pattern in ['img.bezrealitky', 'images', 'foto', 'photo']):
+                if src.startswith('//'):
+                    src = 'https:' + src
+                elif src.startswith('/'):
+                    src = 'https://www.bezrealitky.cz' + src
+                if src not in images and src.startswith('http'):
+                    images.append(src)
+        
+        if images:
+            Actor.log.info(f'Found {len(images)} images')
+    except Exception as e:
+        Actor.log.debug(f'Error extracting images: {e}')
+    
+    # Extract seller information
+    seller_info = {}
+    try:
+        if 'bez realitky' in page_content.lower() or 'přímo majitel' in page_content.lower():
+            seller_info['type'] = 'owner'
+            seller_info['note'] = 'Prodává přímo majitel - bez provize'
+        else:
+            seller_info['type'] = 'agent'
+        
+        phone_match = re.search(r'\+420\s*\d{3}\s*\d{3}\s*\d{3}', page_content)
         if phone_match:
-            seller_phone = phone_match.group()
+            seller_info['phone'] = clean_text(phone_match.group())
         
         email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', page_content)
         if email_match:
-            seller_email = email_match.group()
-        
-        seller_elem = await page.query_selector('[class*="seller"], [class*="prodejce"], [class*="realitka"]')
-        if seller_elem:
-            seller_name = clean_text(await seller_elem.text_content())
+            seller_info['email'] = email_match.group()
     except Exception as e:
         Actor.log.debug(f'Error extracting seller info: {e}')
     
     # Build final data structure
     data = {
         'url': url,
+        'propertyId': property_id,
         'title': title,
+        'category': category,
         'description': description,
+        'descriptionEnglish': description_english,
         'price': price,
         'priceType': price_type,
-        'location': ' '.join(location_parts) if location_parts else None,
-        'attributes': attributes,
-        'seller': {
-            'name': seller_name,
-            'phone': seller_phone,
-            'email': seller_email,
+        'location': {
+            'full': location,
+            'city': city,
+            'district': district,
+            'street': street,
         },
+        'propertyDetails': property_details,
+        'attributes': attributes,
+        'features': subtitle_features,
+        'amenities': amenities,
+        'images': images,
+        'seller': seller_info,
+        'breadcrumbs': breadcrumbs[:10] if breadcrumbs else [],
         'scrapedAt': page.url,
     }
     
-    return data
+    # Clean up empty values but keep structure
+    data_cleaned = {}
+    for key, value in data.items():
+        if key in ['location', 'propertyDetails', 'seller']:
+            data_cleaned[key] = value
+        elif value not in [None, '', [], {}]:
+            data_cleaned[key] = value
+    
+    return data_cleaned
 
 
 async def handle_consent_page(page: Any, url: str, crawler_config: dict[str, Any]) -> bool:
     """Handle cookie consent page if present.
+    
+    Bezrealitky.cz typically doesn't have consent pages, but this is kept for compatibility.
     
     Args:
         page: Playwright page object
@@ -214,90 +365,7 @@ async def handle_consent_page(page: Any, url: str, crawler_config: dict[str, Any
         crawler_config: Crawler configuration
     
     Returns:
-        True if consent was handled successfully, False otherwise
+        True (Bezrealitky doesn't typically have consent pages)
     """
-    try:
-        current_url = page.url
-        if 'cmp.seznam.cz' in current_url or 'nastaveni-souhlasu' in current_url:
-            Actor.log.info(f'Detected cookie consent page: {current_url}')
-            await page.wait_for_timeout(3000)
-            
-            consent_handled = False
-            
-            # In non-headless mode, give user time to manually click
-            if not crawler_config.get('headless', True):
-                Actor.log.info('='*60)
-                Actor.log.info('MANUAL ACTION REQUIRED:')
-                Actor.log.info('Please click the "Souhlasím" button in the browser window')
-                Actor.log.info('Waiting 20 seconds for manual click...')
-                Actor.log.info('='*60)
-                
-                try:
-                    await page.wait_for_url('**/detail/**', timeout=20000)
-                    consent_handled = True
-                    Actor.log.info('Successfully navigated to detail page!')
-                except:
-                    try:
-                        current_url = page.url
-                        if 'sreality.cz/detail' in current_url:
-                            consent_handled = True
-                            Actor.log.info('Now on detail page')
-                    except:
-                        Actor.log.warning('Page may have closed or navigated unexpectedly')
-            
-            # Try to find and click consent button automatically
-            if not consent_handled:
-                try:
-                    await page.wait_for_function(
-                        "document.body.innerText.includes('Souhlasím')",
-                        timeout=10000
-                    )
-                    Actor.log.info('Consent dialog loaded with "Souhlasím" text')
-                except Exception as e:
-                    Actor.log.warning(f'Could not find "Souhlasím" text: {e}')
-                
-                await page.wait_for_timeout(2000)
-                
-                try:
-                    all_clickable = await page.locator('button, a, [role="button"], div[onclick]').all()
-                    Actor.log.info(f'Found {len(all_clickable)} clickable elements')
-                    
-                    for i, elem in enumerate(all_clickable):
-                        try:
-                            text = await elem.inner_text()
-                            if text and 'Souhlasím' in text.strip():
-                                Actor.log.info(f'Found "Souhlasím" element! Clicking...')
-                                await elem.click(timeout=5000, force=True)
-                                
-                                try:
-                                    await page.wait_for_url('**/detail/**', timeout=10000)
-                                    consent_handled = True
-                                    Actor.log.info('Successfully navigated to detail page!')
-                                    break
-                                except:
-                                    await page.wait_for_timeout(3000)
-                                    if 'sreality.cz/detail' in page.url:
-                                        consent_handled = True
-                                        Actor.log.info('Now on detail page!')
-                                        break
-                        except Exception as e:
-                            Actor.log.debug(f'Element {i} error: {str(e)[:100]}')
-                            continue
-                except Exception as e:
-                    Actor.log.warning(f'Error searching elements: {e}')
-                
-                # Force navigation if button clicking didn't work
-                if not consent_handled:
-                    Actor.log.warning('Button clicking failed, forcing navigation...')
-                    try:
-                        await page.goto(url, wait_until='networkidle', timeout=20000)
-                        Actor.log.info('Force navigated to target URL')
-                    except Exception as e:
-                        Actor.log.error(f'Force navigation failed: {e}')
-            
-            return consent_handled
-        
-        return True
-    except Exception as e:
-        Actor.log.warning(f'Error handling consent page: {e}')
-        return False
+    # Bezrealitky.cz doesn't typically have consent pages
+    return True
