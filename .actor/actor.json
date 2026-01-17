@@ -1,8 +1,8 @@
 {
 	"actorSpecification": 1,
 	"name": "verihome",
-	"title": "Sreality.cz Detail Page Scraper",
-	"description": "Scrapes detailed property information from Sreality.cz listing pages including description, price, attributes, and seller information.",
+	"title": "Czech Real Estate Detail Page Scraper",
+	"description": "Scrapes detailed property information from real estate listing pages including description, price, attributes, and seller information.",
 	"version": "0.0",
 	"buildTag": "latest",
 	"meta": {
