@@ -42,7 +42,8 @@ async def call_openrouter_llm(
             print("ERROR: APIFY_TOKEN not found. Make sure it's set in your environment or .env file")
             return None
         
-        print(f"Using APIFY_TOKEN: {apify_token[:10]}...{apify_token[-4:]}")
+        # Don't log token even partially - security best practice
+        print("Using APIFY_TOKEN: [REDACTED]")
         
         # Use OpenAI client with OpenRouter actor endpoint
         # Base URL: https://openrouter.apify.actor/api/v1
@@ -216,7 +217,8 @@ async def main() -> None:
         print("  or add to .env file: APIFY_TOKEN=your-token-here")
         sys.exit(1)
     
-    print(f"APIFY_TOKEN found: {apify_token[:10]}...{apify_token[-4:]}\n")
+    # Don't log token even partially - security best practice
+    print("APIFY_TOKEN found: [REDACTED]\n")
     
     # Run tests
     await test_simple_query()
