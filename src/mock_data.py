@@ -163,10 +163,9 @@ def generate_mock_result_for_property(
     Returns:
         ConsistencyCheckResult object for the property
     """
-    import hashlib
+    from src.utils import generate_listing_id_from_url
     
-    listing_id = hashlib.md5(url.encode()).hexdigest()[:12].upper()
-    listing_id = f"PRG-{listing_id}"
+    listing_id = generate_listing_id_from_url(url)
     
     address = property_address or title or url
     
@@ -284,9 +283,8 @@ def generate_mock_listing_input(
         url = "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
     
     if not listing_id:
-        import hashlib
-        listing_id = hashlib.md5(url.encode()).hexdigest()[:12].upper()
-        listing_id = f"PRG-{listing_id}"
+        from src.utils import generate_listing_id_from_url
+        listing_id = generate_listing_id_from_url(url)
     
     return ListingInput(
         listing_id=listing_id,

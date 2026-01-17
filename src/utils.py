@@ -1,10 +1,24 @@
 """Utility functions for working with scraped data"""
 
+import hashlib
 import json
 from pathlib import Path
 from typing import List
 
 from .models import ScrapeOutput
+
+
+def generate_listing_id_from_url(url: str) -> str:
+    """Generate a standardized listing ID from a URL.
+    
+    Args:
+        url: Property listing URL
+    
+    Returns:
+        Listing ID in format "PRG-XXXXXXXXXXXX" (12 uppercase hex characters)
+    """
+    listing_id = hashlib.md5(url.encode()).hexdigest()[:12].upper()
+    return f"PRG-{listing_id}"
 
 
 def load_scraped_listings(dataset_dir: str = "storage/datasets/default") -> List[ScrapeOutput]:

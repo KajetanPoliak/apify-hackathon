@@ -4,8 +4,6 @@ import json
 from datetime import datetime
 from typing import Any
 
-import hashlib
-
 from apify import Actor
 
 from src.llm_service import check_consistency_with_llm
@@ -15,7 +13,7 @@ from src.models import ConsistencyCheckResult, InconsistencyFinding, SeverityLev
 
 async def check_property_consistency(
     property_data: dict[str, Any],
-    model: str = "openrouter/auto",
+    model: str = "openrouter/openai/gpt-4o",
     temperature: float = 0.7,
 ) -> ConsistencyCheckResult:
     """Check property listing for internal consistency.
@@ -82,8 +80,8 @@ async def check_property_consistency(
                     )
                 
                 # Generate listing ID from URL
-                listing_id = hashlib.md5(url.encode()).hexdigest()[:12].upper()
-                listing_id = f"PRG-{listing_id}"
+                from src.utils import generate_listing_id_from_url
+                listing_id = generate_listing_id_from_url(url)
                 
                 result = ConsistencyCheckResult(
                     listing_id=listing_id,

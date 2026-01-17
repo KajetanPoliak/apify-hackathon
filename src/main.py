@@ -22,6 +22,20 @@ from src.mock_data import generate_mock_inconsistency_results, generate_mock_res
 from src.scraper_service import extract_property_data, handle_consent_page
 
 
+async def push_mock_results_fallback(context: PlaywrightCrawlingContext | None = None) -> None:
+    """Push mock inconsistency results as fallback when processing fails.
+    
+    Args:
+        context: Playwright crawling context (if available), otherwise uses Actor.push_data
+    """
+    mock_results = generate_mock_inconsistency_results()
+    for result in mock_results:
+        if context:
+            await context.push_data(result.model_dump(mode='json'))
+        else:
+            await Actor.push_data(result.model_dump(mode='json'))
+
+
 async def process_property(
     context: PlaywrightCrawlingContext,
     llm_model: str,
@@ -60,9 +74,7 @@ async def process_property(
         Actor.log.exception(f'Error scraping property {url}: {e}')
         # Fallback to mock data if scraping fails
         Actor.log.warning(f'Scraping failed for {url}, outputting mock inconsistency results')
-        mock_results = generate_mock_inconsistency_results()
-        for result in mock_results:
-            await context.push_data(result.model_dump(mode='json'))
+        await push_mock_results_fallback(context)
         return
     
     # Step 2: Convert scraped data to ListingInput using structured outputs
@@ -185,7 +197,7 @@ async def main() -> None:
         ]
         
         max_requests = actor_input.get('maxRequestsPerCrawl', 100)
-        llm_model = actor_input.get('llmModel', 'openrouter/auto')
+        llm_model = actor_input.get('llmModel', 'openrouter/openai/gpt-4o')
         llm_temperature = actor_input.get('llmTemperature', 0.7)
         proxy_config = actor_input.get('proxyConfiguration', {'useApifyProxy': False})
         
@@ -225,9 +237,7 @@ async def main() -> None:
                 Actor.log.exception(f'Error processing property: {e}')
                 # Fallback to mock data on any error
                 Actor.log.warning('Processing failed, outputting mock inconsistency results')
-                mock_results = generate_mock_inconsistency_results()
-                for result in mock_results:
-                    await context.push_data(result.model_dump(mode='json'))
+                await push_mock_results_fallback(context)
         
         # Run the crawler
         try:
@@ -237,6 +247,4 @@ async def main() -> None:
             Actor.log.exception(f'Error during crawler execution: {e}')
             Actor.log.warning('Crawler failed, outputting mock inconsistency results')
             # Output mock data as fallback
-            mock_results = generate_mock_inconsistency_results()
-            for result in mock_results:
-                await Actor.push_data(result.model_dump(mode='json'))
+            await push_mock_results_fallback(context=None)

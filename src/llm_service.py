@@ -93,7 +93,7 @@ def sanitize_json_schema_for_llm(schema: dict[str, Any]) -> dict[str, Any]:
 
 async def call_openrouter_llm(
     messages: list[dict[str, str]],
-    model: str = "openrouter/auto",
+    model: str = "openrouter/openai/gpt-4o",
     temperature: float = 0.7,
     response_format: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
@@ -127,7 +127,24 @@ async def call_openrouter_llm(
             Actor.log.error("APIFY_TOKEN not found. Make sure it's set in your environment or .env file")
             return None
         
+        # Log the messages being sent to the LLM
         Actor.log.info(f"Calling OpenRouter actor via OpenAI client with model: {model}")
+        Actor.log.info(f"Temperature: {temperature}")
+        Actor.log.debug("=" * 80)
+        Actor.log.debug("LLM REQUEST MESSAGES:")
+        Actor.log.debug("=" * 80)
+        for i, msg in enumerate(messages, 1):
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            # Truncate very long content for readability
+            content_preview = content[:500] + "..." if len(content) > 500 else content
+            Actor.log.debug(f"Message {i} [{role}]:")
+            Actor.log.debug(content_preview)
+            if len(content) > 500:
+                Actor.log.debug(f"... (truncated, total length: {len(content)} characters)")
+        Actor.log.debug("=" * 80)
+        if response_format:
+            Actor.log.debug(f"Response format: {json.dumps(response_format, indent=2)}")
         
         # Initialize OpenAI client
         client = AsyncOpenAI(
@@ -152,6 +169,25 @@ async def call_openrouter_llm(
         
         # Call the LLM using OpenAI chat completions API
         completion = await client.chat.completions.create(**request_params)
+        
+        # Log response summary
+        Actor.log.debug("=" * 80)
+        Actor.log.debug("LLM RESPONSE:")
+        Actor.log.debug("=" * 80)
+        if completion.choices:
+            choice = completion.choices[0]
+            if hasattr(choice, 'message'):
+                role = choice.message.role if hasattr(choice.message, 'role') else 'unknown'
+                content = choice.message.content if hasattr(choice.message, 'content') else None
+                if content:
+                    content_preview = content[:500] + "..." if len(content) > 500 else content
+                    Actor.log.debug(f"Response [{role}]:")
+                    Actor.log.debug(content_preview)
+                    if len(content) > 500:
+                        Actor.log.debug(f"... (truncated, total length: {len(content)} characters)")
+                else:
+                    Actor.log.debug("Response: (no content, possibly structured output)")
+        Actor.log.debug("=" * 80)
         
         # Convert response to dict format
         # Handle structured outputs - content may be in message.content or elsewhere
@@ -188,7 +224,7 @@ async def call_openrouter_llm(
 
 async def analyze_property_with_llm(
     property_data: dict[str, Any],
-    model: str = "openrouter/auto",
+    model: str = "openrouter/openai/gpt-4o",
     temperature: float = 0.7,
 ) -> dict[str, Any] | None:
     """Analyze a property listing using LLM.
@@ -246,7 +282,7 @@ Respond in JSON format with keys: summary, sellingPoints (array), concerns (arra
 
 async def check_consistency_with_llm(
     property_data: dict[str, Any],
-    model: str = "openrouter/auto",
+    model: str = "openrouter/openai/gpt-4o",
     temperature: float = 0.7,
 ) -> dict[str, Any] | None:
     """Check property listing consistency using LLM.
@@ -314,9 +350,77 @@ def extract_float_from_text(text: str | None) -> float | None:
     return float(match.group()) if match else None
 
 
+def extract_content_from_llm_response(llm_result: dict[str, Any]) -> str | None:
+    """Extract content from LLM response, handling both dict and object formats.
+    
+    Args:
+        llm_result: LLM response dictionary with 'choices' key
+    
+    Returns:
+        Content string from the response, or None if not found
+    """
+    if not llm_result or 'choices' not in llm_result or len(llm_result['choices']) == 0:
+        return None
+    
+    choice = llm_result['choices'][0]
+    content = None
+    message = choice.get('message', {}) if isinstance(choice, dict) else getattr(choice, 'message', {})
+    
+    if isinstance(message, dict):
+        # Check for refusal
+        if message.get('refusal'):
+            Actor.log.warning(f"LLM refused request: {message.get('refusal')}")
+            return None
+        
+        # Get content from message dict
+        content = message.get('content')
+        
+        # Check for tool_calls (some models use this for structured outputs)
+        if not content and message.get('tool_calls'):
+            for tool_call in message['tool_calls']:
+                func = tool_call.get('function', {})
+                if func.get('arguments'):
+                    content = func['arguments']
+                    break
+    else:
+        # Handle object-style response
+        if hasattr(message, 'refusal') and message.refusal:
+            Actor.log.warning(f"LLM refused request: {message.refusal}")
+            return None
+        
+        if hasattr(message, 'content') and message.content:
+            content = message.content
+        elif hasattr(message, 'tool_calls') and message.tool_calls:
+            for tool_call in message.tool_calls:
+                if hasattr(tool_call, 'function') and hasattr(tool_call.function, 'arguments'):
+                    content = tool_call.function.arguments
+                    break
+    
+    return content
+
+
+def parse_json_content(content: str | Any) -> dict[str, Any] | None:
+    """Parse JSON content from LLM response.
+    
+    Args:
+        content: Content string or already parsed dict
+    
+    Returns:
+        Parsed dictionary, or None if parsing fails
+    """
+    if isinstance(content, str):
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            Actor.log.warning(f"Failed to parse JSON from LLM response: {content[:200]}")
+            return None
+    else:
+        return content
+
+
 async def convert_scraped_data_to_listing_input(
     property_data: dict[str, Any],
-    model: str = "openrouter/auto",
+    model: str = "openrouter/openai/gpt-4o",
     temperature: float = 0.7,
 ) -> ListingInput | None:
     """Convert scraped property data to ListingInput format using structured outputs.
@@ -381,10 +485,9 @@ async def convert_scraped_data_to_listing_input(
                     pass
     
     # Generate listing ID from URL
-    import hashlib
+    from src.utils import generate_listing_id_from_url
     url = property_data.get('url', '')
-    listing_id = hashlib.md5(url.encode()).hexdigest()[:12].upper()
-    listing_id = f"PRG-{listing_id}"
+    listing_id = generate_listing_id_from_url(url)
     
     # Build prompt for conversion
     prompt = f"""Convert this scraped real estate listing data into a structured ListingInput format.
@@ -474,124 +577,81 @@ Always return valid JSON matching the schema exactly with all constraints satisf
             response_format=response_format,
         )
         
-        if llm_result and 'choices' in llm_result and len(llm_result['choices']) > 0:
-            choice = llm_result['choices'][0]
-            
-            # Get content from dict response
-            content = None
-            message = choice.get('message', {}) if isinstance(choice, dict) else getattr(choice, 'message', {})
-            
-            if isinstance(message, dict):
-                # Check for refusal
-                if message.get('refusal'):
-                    Actor.log.warning(f"LLM refused request: {message.get('refusal')}")
-                    return None
-                
-                # Get content from message dict
-                content = message.get('content')
-                
-                # Check for tool_calls (some models use this for structured outputs)
-                if not content and message.get('tool_calls'):
-                    for tool_call in message['tool_calls']:
-                        func = tool_call.get('function', {})
-                        if func.get('arguments'):
-                            content = func['arguments']
-                            break
+        # Extract content from LLM response
+        content = extract_content_from_llm_response(llm_result)
+        if not content:
+            Actor.log.warning("No content in LLM response")
+            return None
+        
+        # Parse JSON content
+        listing_data = parse_json_content(content)
+        if not listing_data:
+            return None
+        
+        # Validate and fix data before creating ListingInput
+        # Fix list_price if invalid (must be > 0)
+        if listing_data.get('list_price') is None or listing_data.get('list_price', 0) <= 0:
+            Actor.log.warning(f"Invalid list_price from LLM: {listing_data.get('list_price')}, attempting to fix...")
+            # Try to use extracted price value
+            if price_value and price_value > 0:
+                listing_data['list_price'] = price_value
+                Actor.log.info(f"Fixed list_price using extracted value: {price_value}")
             else:
-                # Handle object-style response
-                if hasattr(message, 'refusal') and message.refusal:
-                    Actor.log.warning(f"LLM refused request: {message.refusal}")
-                    return None
-                
-                if hasattr(message, 'content') and message.content:
-                    content = message.content
-                elif hasattr(message, 'tool_calls') and message.tool_calls:
-                    for tool_call in message.tool_calls:
-                        if hasattr(tool_call, 'function') and hasattr(tool_call.function, 'arguments'):
-                            content = tool_call.function.arguments
-                            break
-            
-            if not content:
-                Actor.log.warning("No content in LLM response")
-                return None
-            
-            # Parse JSON content
-            if isinstance(content, str):
-                try:
-                    listing_data = json.loads(content)
-                except json.JSONDecodeError:
-                    Actor.log.warning(f"Failed to parse JSON from LLM response: {content[:200]}")
-                    return None
-            else:
-                listing_data = content
-            
-            # Validate and fix data before creating ListingInput
-            # Fix list_price if invalid (must be > 0)
-            if listing_data.get('list_price') is None or listing_data.get('list_price', 0) <= 0:
-                Actor.log.warning(f"Invalid list_price from LLM: {listing_data.get('list_price')}, attempting to fix...")
-                # Try to use extracted price value
-                if price_value and price_value > 0:
-                    listing_data['list_price'] = price_value
-                    Actor.log.info(f"Fixed list_price using extracted value: {price_value}")
-                else:
-                    # Calculate from price per m² if available
-                    price_per_m2 = property_details.get('pricePerM2') or property_data.get('attributes', {}).get('Cena za jednotku', '')
-                    if price_per_m2 and area_sqm:
-                        price_clean = re.sub(r'[^\d.]', '', str(price_per_m2).replace(' ', '').replace('​', ''))
-                        if price_clean:
-                            try:
-                                price_per_m2_value = float(price_clean)
-                                calculated_price = price_per_m2_value * area_sqm
-                                if calculated_price > 0:
-                                    listing_data['list_price'] = calculated_price
-                                    Actor.log.info(f"Fixed list_price using calculated value: {calculated_price}")
-                                else:
-                                    listing_data['list_price'] = 1000000.0  # Minimum fallback
-                                    Actor.log.warning(f"Using minimum fallback price: 1000000.0")
-                            except (ValueError, TypeError):
+                # Calculate from price per m² if available
+                price_per_m2 = property_details.get('pricePerM2') or property_data.get('attributes', {}).get('Cena za jednotku', '')
+                if price_per_m2 and area_sqm:
+                    price_clean = re.sub(r'[^\d.]', '', str(price_per_m2).replace(' ', '').replace('​', ''))
+                    if price_clean:
+                        try:
+                            price_per_m2_value = float(price_clean)
+                            calculated_price = price_per_m2_value * area_sqm
+                            if calculated_price > 0:
+                                listing_data['list_price'] = calculated_price
+                                Actor.log.info(f"Fixed list_price using calculated value: {calculated_price}")
+                            else:
                                 listing_data['list_price'] = 1000000.0  # Minimum fallback
                                 Actor.log.warning(f"Using minimum fallback price: 1000000.0")
-                    else:
-                        # Use minimum reasonable price for Czech apartments
-                        listing_data['list_price'] = 1000000.0
-                        Actor.log.warning(f"Using minimum fallback price: 1000000.0")
+                        except (ValueError, TypeError):
+                            listing_data['list_price'] = 1000000.0  # Minimum fallback
+                            Actor.log.warning(f"Using minimum fallback price: 1000000.0")
+                else:
+                    # Use minimum reasonable price for Czech apartments
+                    listing_data['list_price'] = 1000000.0
+                    Actor.log.warning(f"Using minimum fallback price: 1000000.0")
+        
+        # Fix description if too short
+        if listing_data.get('description'):
+            desc = listing_data['description']
+            if len(desc) < 10:
+                Actor.log.warning(f"Description too short ({len(desc)} chars), extending...")
+                # Use title or create a basic description
+                title = property_data.get('title', '')
+                if title and len(title) >= 10:
+                    listing_data['description'] = title
+                else:
+                    listing_data['description'] = f"Property listing in {city}. {desc}"[:500]
+        
+        # Ensure bedrooms and bathrooms are valid
+        if listing_data.get('bedrooms') is None or listing_data.get('bedrooms', -1) < 0:
+            listing_data['bedrooms'] = max(0, bedrooms)  # Use extracted value or 0
+        if listing_data.get('bathrooms') is None or listing_data.get('bathrooms', -1) < 0:
+            listing_data['bathrooms'] = 1.0  # Default to 1 bathroom
+        
+        # Fix year_built if out of range
+        if listing_data.get('year_built') is not None:
+            year = listing_data['year_built']
+            if year < 1800 or year > 2030:
+                Actor.log.warning(f"Year built out of range: {year}, setting to None")
+                listing_data['year_built'] = None
             
-            # Fix description if too short
-            if listing_data.get('description'):
-                desc = listing_data['description']
-                if len(desc) < 10:
-                    Actor.log.warning(f"Description too short ({len(desc)} chars), extending...")
-                    # Use title or create a basic description
-                    title = property_data.get('title', '')
-                    if title and len(title) >= 10:
-                        listing_data['description'] = title
-                    else:
-                        listing_data['description'] = f"Property listing in {city}. {desc}"[:500]
-            
-            # Ensure bedrooms and bathrooms are valid
-            if listing_data.get('bedrooms') is None or listing_data.get('bedrooms', -1) < 0:
-                listing_data['bedrooms'] = max(0, bedrooms)  # Use extracted value or 0
-            if listing_data.get('bathrooms') is None or listing_data.get('bathrooms', -1) < 0:
-                listing_data['bathrooms'] = 1.0  # Default to 1 bathroom
-            
-            # Fix year_built if out of range
-            if listing_data.get('year_built') is not None:
-                year = listing_data['year_built']
-                if year < 1800 or year > 2030:
-                    Actor.log.warning(f"Year built out of range: {year}, setting to None")
-                    listing_data['year_built'] = None
-            
-            # Create ListingInput from parsed and validated data
-            try:
-                listing_input = ListingInput(**listing_data)
-                Actor.log.info(f"Successfully converted to ListingInput: {listing_input.listing_id}")
-                return listing_input
-            except Exception as e:
-                Actor.log.exception(f"Failed to create ListingInput from LLM response: {e}")
-                Actor.log.debug(f"LLM response data: {listing_data}")
-                return None
-        else:
-            Actor.log.warning("LLM returned no result")
+        # Create ListingInput from parsed and validated data
+        try:
+            listing_input = ListingInput(**listing_data)
+            Actor.log.info(f"Successfully converted to ListingInput: {listing_input.listing_id}")
+            return listing_input
+        except Exception as e:
+            Actor.log.exception(f"Failed to create ListingInput from LLM response: {e}")
+            Actor.log.debug(f"LLM response data: {listing_data}")
             return None
             
     except Exception as e:
@@ -601,7 +661,7 @@ Always return valid JSON matching the schema exactly with all constraints satisf
 
 async def check_consistency_with_structured_output(
     listing_input: ListingInput,
-    model: str = "openrouter/auto",
+    model: str = "openrouter/openai/gpt-4o",
     temperature: float = 0.7,
 ) -> ConsistencyCheckResult | None:
     """Check property listing consistency using structured outputs.
@@ -680,73 +740,30 @@ Return a ConsistencyCheckResult with all findings properly categorized by severi
             response_format=response_format,
         )
         
-        if llm_result and 'choices' in llm_result and len(llm_result['choices']) > 0:
-            choice = llm_result['choices'][0]
+        # Extract content from LLM response
+        content = extract_content_from_llm_response(llm_result)
+        if not content:
+            Actor.log.warning("No content in LLM response")
+            return None
+        
+        # Parse JSON content
+        consistency_data = parse_json_content(content)
+        if not consistency_data:
+            return None
+        
+        # Create ConsistencyCheckResult from parsed data
+        try:
+            # Ensure checked_at is set if not provided
+            if 'checked_at' not in consistency_data:
+                from datetime import datetime
+                consistency_data['checked_at'] = datetime.now().isoformat()
             
-            # Get content from dict response
-            content = None
-            message = choice.get('message', {}) if isinstance(choice, dict) else getattr(choice, 'message', {})
-            
-            if isinstance(message, dict):
-                # Check for refusal
-                if message.get('refusal'):
-                    Actor.log.warning(f"LLM refused request: {message.get('refusal')}")
-                    return None
-                
-                # Get content from message dict
-                content = message.get('content')
-                
-                # Check for tool_calls (some models use this for structured outputs)
-                if not content and message.get('tool_calls'):
-                    for tool_call in message['tool_calls']:
-                        func = tool_call.get('function', {})
-                        if func.get('arguments'):
-                            content = func['arguments']
-                            break
-            else:
-                # Handle object-style response
-                if hasattr(message, 'refusal') and message.refusal:
-                    Actor.log.warning(f"LLM refused request: {message.refusal}")
-                    return None
-                
-                if hasattr(message, 'content') and message.content:
-                    content = message.content
-                elif hasattr(message, 'tool_calls') and message.tool_calls:
-                    for tool_call in message.tool_calls:
-                        if hasattr(tool_call, 'function') and hasattr(tool_call.function, 'arguments'):
-                            content = tool_call.function.arguments
-                            break
-            
-            if not content:
-                Actor.log.warning("No content in LLM response")
-                return None
-            
-            # Parse JSON content
-            if isinstance(content, str):
-                try:
-                    consistency_data = json.loads(content)
-                except json.JSONDecodeError:
-                    Actor.log.warning(f"Failed to parse JSON from LLM response: {content[:200]}")
-                    return None
-            else:
-                consistency_data = content
-            
-            # Create ConsistencyCheckResult from parsed data
-            try:
-                # Ensure checked_at is set if not provided
-                if 'checked_at' not in consistency_data:
-                    from datetime import datetime
-                    consistency_data['checked_at'] = datetime.now().isoformat()
-                
-                consistency_result = ConsistencyCheckResult(**consistency_data)
-                Actor.log.info(f"Successfully created ConsistencyCheckResult: {consistency_result.total_inconsistencies} inconsistencies found")
-                return consistency_result
-            except Exception as e:
-                Actor.log.exception(f"Failed to create ConsistencyCheckResult from LLM response: {e}")
-                Actor.log.debug(f"LLM response data: {consistency_data}")
-                return None
-        else:
-            Actor.log.warning("LLM returned no result")
+            consistency_result = ConsistencyCheckResult(**consistency_data)
+            Actor.log.info(f"Successfully created ConsistencyCheckResult: {consistency_result.total_inconsistencies} inconsistencies found")
+            return consistency_result
+        except Exception as e:
+            Actor.log.exception(f"Failed to create ConsistencyCheckResult from LLM response: {e}")
+            Actor.log.debug(f"LLM response data: {consistency_data}")
             return None
             
     except Exception as e:
