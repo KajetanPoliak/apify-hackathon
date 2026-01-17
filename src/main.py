@@ -131,8 +131,18 @@ async def process_property(
                 Actor.log.info('=' * 80)
                 
                 # Store the ConsistencyCheckResult
-                await context.push_data(consistency_result.model_dump(mode='json'))
-                Actor.log.info(f'ConsistencyCheckResult stored: {consistency_result.total_inconsistencies} inconsistencies found')
+                # Ensure all required fields are present before pushing
+                consistency_data = consistency_result.model_dump(mode='json')
+                
+                # Validate required fields are present
+                required_fields = ['listing_id', 'property_address', 'total_inconsistencies', 'is_consistent', 'summary']
+                missing_fields = [f for f in required_fields if f not in consistency_data]
+                if missing_fields:
+                    Actor.log.error(f'ConsistencyCheckResult missing required fields: {missing_fields}')
+                else:
+                    await context.push_data(consistency_data)
+                    Actor.log.info(f'ConsistencyCheckResult stored: {consistency_result.total_inconsistencies} inconsistencies found')
+                    Actor.log.debug(f'Pushed consistency result with {len(consistency_data.get("findings", []))} findings')
             else:
                 Actor.log.warning('Failed to check consistency with structured outputs')
                 
@@ -150,8 +160,18 @@ async def process_property(
             )
             
             # Push consistency result to dataset
-            await context.push_data(consistency_result.model_dump(mode='json'))
-            Actor.log.info(f'Legacy consistency check completed: {consistency_result.summary}')
+            # Ensure all required fields are present before pushing
+            consistency_data = consistency_result.model_dump(mode='json')
+            
+            # Validate required fields are present
+            required_fields = ['listing_id', 'property_address', 'total_inconsistencies', 'is_consistent', 'summary']
+            missing_fields = [f for f in required_fields if f not in consistency_data]
+            if missing_fields:
+                Actor.log.error(f'Legacy ConsistencyCheckResult missing required fields: {missing_fields}')
+            else:
+                await context.push_data(consistency_data)
+                Actor.log.info(f'Legacy consistency check completed: {consistency_result.summary}')
+                Actor.log.debug(f'Pushed legacy consistency result with {len(consistency_data.get("findings", []))} findings')
             
         except Exception as e:
             Actor.log.exception(f'Error during legacy consistency check: {e}')
@@ -165,7 +185,17 @@ async def process_property(
                 price=property_data.get('price'),
                 reason="Consistency check failed",
             )
-            await context.push_data(mock_result.model_dump(mode='json'))
+            # Push mock result to dataset
+            mock_data = mock_result.model_dump(mode='json')
+            
+            # Validate required fields are present
+            required_fields = ['listing_id', 'property_address', 'total_inconsistencies', 'is_consistent', 'summary']
+            missing_fields = [f for f in required_fields if f not in mock_data]
+            if missing_fields:
+                Actor.log.error(f'Mock ConsistencyCheckResult missing required fields: {missing_fields}')
+            else:
+                await context.push_data(mock_data)
+                Actor.log.debug(f'Pushed mock consistency result with {len(mock_data.get("findings", []))} findings')
             consistency_result = mock_result
     
     # Add consistency result reference to property data if available
