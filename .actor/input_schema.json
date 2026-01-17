@@ -10,7 +10,7 @@
       "description": "List of Bezrealitky.cz detail page URLs to scrape (e.g., https://www.bezrealitky.cz/nemovitosti-byty-domy/...)",
       "default": [
         {
-          "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/974793-nabidka-prodej-bytu-hostynska-praha"
+          "url": "https://www.bezrealitky.cz/nemovitosti-byty-domy/965102-nabidka-prodej-bytu-melnicka-hlavni-mesto-praha"
         }
       ],
       "prefill": [
@@ -64,7 +64,7 @@
       "title": "LLM Model",
       "type": "string",
       "description": "Model to use for LLM requests",
-      "default": "openrouter/openai/gpt-5-mini",
+      "default": "google/gemini-3-flash-preview",
       "enum": [
         "openrouter/openai/gpt-5-mini",
         "openrouter/openai/gpt-4o",
