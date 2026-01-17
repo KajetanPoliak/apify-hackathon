@@ -21,7 +21,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 194400,
         "price_category": "premium",
         "population": 30343,
-        "kebab_index": 7,
+        "kebab_index": 13,
         "crime_nasilna": 181,
         "crime_kradeze_vloupanim": 303,
         "crime_pozary": 8
@@ -32,7 +32,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 177000,
         "price_category": "high",
         "population": 49624,
-        "kebab_index": 0,
+        "kebab_index": 17,
         "crime_nasilna": 149,
         "crime_kradeze_vloupanim": 355,
         "crime_pozary": 3
@@ -43,7 +43,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 155500,
         "price_category": "high",
         "population": 72991,
-        "kebab_index": 0,
+        "kebab_index": 12,
         "crime_nasilna": 75,
         "crime_kradeze_vloupanim": 353,
         "crime_pozary": 2
@@ -54,7 +54,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 129500,
         "price_category": "medium",
         "population": 130287,
-        "kebab_index": 19,
+        "kebab_index": 10,
         "crime_nasilna": 142,
         "crime_kradeze_vloupanim": 526,
         "crime_pozary": 12
@@ -65,7 +65,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 148300,
         "price_category": "high",
         "population": 83573,
-        "kebab_index": 16,
+        "kebab_index": 8,
         "crime_nasilna": 101,
         "crime_kradeze_vloupanim": 407,
         "crime_pozary": 6
@@ -76,7 +76,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 144300,
         "price_category": "high",
         "population": 100600,
-        "kebab_index": 0,
+        "kebab_index": 7,
         "crime_nasilna": 93,
         "crime_kradeze_vloupanim": 173,
         "crime_pozary": 4
@@ -87,7 +87,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 164500,
         "price_category": "high",
         "population": 40843,
-        "kebab_index": 6,
+        "kebab_index": 11,
         "crime_nasilna": 103,
         "crime_kradeze_vloupanim": 106,
         "crime_pozary": 4
@@ -98,7 +98,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 134400,
         "price_category": "medium",
         "population": 102021,
-        "kebab_index": 10,
+        "kebab_index": 7,
         "crime_nasilna": 151,
         "crime_kradeze_vloupanim": 329,
         "crime_pozary": 16
@@ -109,7 +109,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 122200,
         "price_category": "medium",
         "population": 50364,
-        "kebab_index": 13,
+        "kebab_index": 8,
         "crime_nasilna": 74,
         "crime_kradeze_vloupanim": 215,
         "crime_pozary": 4
@@ -120,7 +120,7 @@ prague_real_estate = {
         "avg_price_per_sqm_czk": 127800,
         "price_category": "medium",
         "population": 110000,
-        "kebab_index": 0,
+        "kebab_index": 19,
         "crime_nasilna": 125,
         "crime_kradeze_vloupanim": 549,
         "crime_pozary": 10
