@@ -198,11 +198,15 @@ async def main() -> None:
         
         max_requests = actor_input.get('maxRequestsPerCrawl', 100)
         # Get LLM model from input, defaulting to GPT-5-mini
-        # Handle empty string, None, or missing values
+        # Handle empty string, None, missing values, or "openrouter/auto" (legacy default)
         llm_model_input = actor_input.get('llmModel')
-        if not llm_model_input or llm_model_input.strip() == '':
-            llm_model = 'openrouter/openai/gpt-5-mini'
-            Actor.log.info('No llmModel specified in input, using default: openrouter/openai/gpt-5-mini')
+        if not llm_model_input or llm_model_input.strip() == '' or llm_model_input == 'openrouter/auto':
+            default_model = "google/gemini-3-flash-preview"
+            llm_model = default_model
+            if llm_model_input == 'openrouter/auto':
+                Actor.log.info(f'llmModel was set to "openrouter/auto", overriding to default: {default_model}')
+            else:
+                Actor.log.info(f'No llmModel specified in input, using default: {default_model}')
         else:
             llm_model = llm_model_input
             Actor.log.info(f'Using LLM model from input: {llm_model}')
