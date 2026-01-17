@@ -144,6 +144,7 @@ class LocationInfo(BaseModel):
     district: str | None = Field(None, description="District/neighborhood (e.g., Karlín, Malešice, Strašnice)")
     street: str | None = Field(None, description="Street name (e.g., Sokolovská, Počernická)")
     full: str | None = Field(None, description="Full location string (e.g., Praha - Strašnice)")
+    pragueAdminDistrict: str | None = Field(None, description="Prague administrative district (e.g., Prague 8, Prague 10)")
 
 
 class PropertyInfo(BaseModel):
@@ -249,7 +250,8 @@ class ScrapeOutput(BaseModel):
                     "city": "Praha",
                     "district": "Strašnice",
                     "street": "Hostýnská",
-                    "full": "Praha - Strašnice"
+                    "full": "Praha - Strašnice",
+                    "pragueAdminDistrict": "Prague 10"
                 },
                 "propertyDetails": {
                     "area": "57 m²",

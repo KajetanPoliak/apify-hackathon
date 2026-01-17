@@ -157,8 +157,9 @@ apify push
 ### Location Details
 - **Full Location**: Complete location string
 - **City**: Prague, Brno, etc.
-- **District**: Specific district/neighborhood
+- **District**: Specific district/neighborhood (e.g., Karlín, Strašnice, Malešice)
 - **Street**: Street name
+- **Prague Administrative District**: Automatically mapped (e.g., Prague 8, Prague 10) for Prague properties
 - **Breadcrumbs**: Navigation path for context
 
 ### Property Specifications

@@ -11,7 +11,8 @@
     "full": "Praha - Strašnice",
     "city": "Praha",
     "district": "Strašnice",
-    "street": "Hostýnská"
+    "street": "Hostýnská",
+    "pragueAdminDistrict": "Prague 10"
   },
   "propertyDetails": {
     "propertyId": "974793",

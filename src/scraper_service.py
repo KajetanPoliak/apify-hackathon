@@ -6,12 +6,39 @@ from typing import Any
 from apify import Actor
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 
+try:
+    from .prague_districts import get_prague_admin_district
+except ImportError:
+    # Fallback if module not available
+    def get_prague_admin_district(district_name: str):
+        return None
+
 
 def clean_text(text: str | None) -> str | None:
     """Clean and normalize text by removing extra whitespace."""
     if not text:
         return None
     return re.sub(r'\s+', ' ', text.strip())
+
+
+def clean_street_name(street: str | None) -> str | None:
+    """Clean and normalize street name by removing artifacts like 'bez realitky'."""
+    if not street:
+        return None
+    
+    # Remove "bez realitky" text (with or without spaces)
+    street = re.sub(r'bez\s*realitky', '', street, flags=re.IGNORECASE)
+    
+    # Remove leading/trailing special characters and whitespace
+    street = street.strip()
+    
+    # Remove leading bullet points, dashes, etc.
+    street = re.sub(r'^[•\-\s]+', '', street)
+    
+    # Clean up multiple spaces
+    street = re.sub(r'\s+', ' ', street)
+    
+    return street.strip() if street.strip() else None
 
 
 def extract_property_details(soup: Any) -> dict[str, Any]:
@@ -262,8 +289,9 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
                 street_pattern = rf'(?:m²|realitky)\s*([^,]+?),\s*{re.escape(city)}'
                 street_match = re.search(street_pattern, title, re.IGNORECASE)
                 if street_match:
-                    street = clean_text(street_match.group(1))
-                    Actor.log.info(f'✓ Found street: {street}')
+                    street = clean_street_name(street_match.group(1))
+                    if street:  # Only log if we have a valid street after cleaning
+                        Actor.log.info(f'✓ Found street: {street}')
             else:
                 # Fallback: city only
                 city_only_match = re.search(r',\s*(Praha|Brno|Ostrava|Plzeň|Liberec|Olomouc)(?:\s|$)', title, re.IGNORECASE)
@@ -276,6 +304,13 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
             location = f"{city} - {district}"
         elif city:
             location = city
+        
+        # Add Prague administrative district number if available
+        prague_admin_district = None
+        if city and city.lower() == 'praha' and district:
+            prague_admin_district = get_prague_admin_district(district)
+            if prague_admin_district:
+                Actor.log.info(f'✓ Mapped to {prague_admin_district}')
     except Exception as e:
         Actor.log.error(f'Error extracting location: {e}')
     
@@ -332,6 +367,7 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
             'city': city,
             'district': district,
             'street': street,
+            'pragueAdminDistrict': prague_admin_district,
         },
         'propertyDetails': property_details,
         'attributes': attributes,
