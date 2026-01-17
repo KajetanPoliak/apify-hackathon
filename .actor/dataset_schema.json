@@ -51,6 +51,63 @@
             "scrapedAt": {
                 "type": "string",
                 "description": "Timestamp when the data was scraped"
+            },
+            "listing_id": {
+                "type": "string",
+                "description": "Unique listing identifier"
+            },
+            "property_address": {
+                "type": "string",
+                "description": "Property address"
+            },
+            "checked_at": {
+                "type": "string",
+                "description": "Timestamp when consistency check was performed"
+            },
+            "total_inconsistencies": {
+                "type": "number",
+                "description": "Total number of inconsistencies found"
+            },
+            "is_consistent": {
+                "type": "boolean",
+                "description": "True if no inconsistencies found, false otherwise"
+            },
+            "findings": {
+                "type": "array",
+                "description": "Array of inconsistency findings",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field_name": {
+                            "type": "string",
+                            "description": "Field name with the issue"
+                        },
+                        "description_says": {
+                            "type": "string",
+                            "description": "What the description claims"
+                        },
+                        "listing_data_says": {
+                            "type": "string",
+                            "description": "What the structured data shows"
+                        },
+                        "severity": {
+                            "type": "string",
+                            "description": "Severity level: critical, medium, or low"
+                        },
+                        "explanation": {
+                            "type": "string",
+                            "description": "Explanation of the inconsistency"
+                        }
+                    }
+                }
+            },
+            "summary": {
+                "type": "string",
+                "description": "Brief summary of the consistency check"
+            },
+            "type": {
+                "type": "string",
+                "description": "Type of dataset item: 'listing_input', 'completion_summary', or consistency check result"
             }
         }
     },
@@ -94,6 +151,101 @@
                     "url": {
                         "label": "Listing URL",
                         "format": "link"
+                    }
+                }
+            }
+        },
+        "inconsistency_checks": {
+            "title": "Inconsistency Check Results",
+            "description": "Results of consistency checks performed on property listings",
+            "transformation": {
+                "fields": [
+                    "listing_id",
+                    "property_address",
+                    "total_inconsistencies",
+                    "is_consistent",
+                    "summary",
+                    "checked_at",
+                    "findings"
+                ],
+                "omit": ["type"]
+            },
+            "display": {
+                "component": "table",
+                "properties": {
+                    "listing_id": {
+                        "label": "Listing ID",
+                        "format": "text"
+                    },
+                    "property_address": {
+                        "label": "Property Address",
+                        "format": "text"
+                    },
+                    "total_inconsistencies": {
+                        "label": "Total Inconsistencies",
+                        "format": "number"
+                    },
+                    "is_consistent": {
+                        "label": "Is Consistent",
+                        "format": "boolean"
+                    },
+                    "summary": {
+                        "label": "Summary",
+                        "format": "text"
+                    },
+                    "checked_at": {
+                        "label": "Checked At",
+                        "format": "date"
+                    },
+                    "findings": {
+                        "label": "Findings",
+                        "format": "array"
+                    }
+                }
+            }
+        },
+        "inconsistency_details": {
+            "title": "Inconsistency Details",
+            "description": "Detailed view of individual inconsistency findings",
+            "transformation": {
+                "fields": [
+                    "listing_id",
+                    "property_address",
+                    "findings"
+                ],
+                "unwind": ["findings"],
+                "omit": ["type", "checked_at", "total_inconsistencies", "is_consistent", "summary"]
+            },
+            "display": {
+                "component": "table",
+                "properties": {
+                    "listing_id": {
+                        "label": "Listing ID",
+                        "format": "text"
+                    },
+                    "property_address": {
+                        "label": "Property Address",
+                        "format": "text"
+                    },
+                    "findings.field_name": {
+                        "label": "Field",
+                        "format": "text"
+                    },
+                    "findings.severity": {
+                        "label": "Severity",
+                        "format": "text"
+                    },
+                    "findings.description_says": {
+                        "label": "Description Claims",
+                        "format": "text"
+                    },
+                    "findings.listing_data_says": {
+                        "label": "Data Shows",
+                        "format": "text"
+                    },
+                    "findings.explanation": {
+                        "label": "Explanation",
+                        "format": "text"
                     }
                 }
             }
