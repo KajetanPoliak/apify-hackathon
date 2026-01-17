@@ -14,6 +14,16 @@
     "street": "Hostýnská",
     "pragueAdminDistrict": "Prague 10"
   },
+  "districtStats": {
+    "avgPricePerSqmCzk": 127800,
+    "priceChangePercent": 2.6,
+    "priceCategory": "medium",
+    "crimeStats": {
+      "violentCrimes": 125,
+      "burglaries": 549,
+      "fires": 10
+    }
+  },
   "propertyDetails": {
     "propertyId": "974793",
     "area": "57 m²",

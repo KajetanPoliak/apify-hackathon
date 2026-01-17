@@ -20,6 +20,11 @@ This Apify Actor scrapes detailed property information from Bezrealitky.cz listi
   - Images (all property photos)
   - Seller information (owner vs. agent, contact details)
   - Breadcrumb navigation for categorization
+
+- **Automatic Data Enrichment**: Prague properties automatically enhanced with:
+  - Real estate market data (avg price per m², price trends, Q3 2024)
+  - Crime statistics (violent crimes, burglaries, fires, 2025 data)
+  - Administrative district mapping (Prague 1-22)
   
 - **Robust Extraction**: Multiple fallback strategies ensure data quality
 - **JavaScript Rendering**: Uses Playwright crawler to handle dynamic content
@@ -161,6 +166,16 @@ apify push
 - **Street**: Street name
 - **Prague Administrative District**: Automatically mapped (e.g., Prague 8, Prague 10) for Prague properties
 - **Breadcrumbs**: Navigation path for context
+
+### District Statistics (Prague Only)
+Automatically enriched with real-world data for Prague properties:
+- **Average Price per m²**: Market data from Q3 2024 Prague Real Index
+- **Price Change %**: Year-over-year price trend
+- **Price Category**: premium, high, or medium tier
+- **Crime Statistics (2025)**:
+  - Violent crimes
+  - Burglaries  
+  - Fires
 
 ### Property Specifications
 - **Area**: Usable area in m²

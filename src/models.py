@@ -172,6 +172,23 @@ class ConsistencyCheckResult(BaseModel):
 
 # Bezrealitky.cz Scraper Models
 
+class CrimeStats(BaseModel):
+    """Crime statistics for a district"""
+    
+    violentCrimes: int = Field(..., description="Number of violent crimes (násilná kriminalita)")
+    burglaries: int = Field(..., description="Number of burglaries (krádeže vloupáním)")
+    fires: int = Field(..., description="Number of fires (požáry)")
+
+
+class DistrictStats(BaseModel):
+    """Real estate and crime statistics for a Prague district"""
+    
+    avgPricePerSqmCzk: int = Field(..., description="Average price per square meter in CZK (Q3 2024)")
+    priceChangePercent: float = Field(..., description="Year-over-year price change percentage")
+    priceCategory: str = Field(..., description="Price category: premium, high, or medium")
+    crimeStats: CrimeStats = Field(..., description="Crime statistics for 2025")
+
+
 class LocationInfo(BaseModel):
     """Structured location information"""
     
@@ -231,6 +248,12 @@ class ScrapeOutput(BaseModel):
         description="Structured location information with city, district, and street"
     )
     
+    # District statistics (real estate & crime data)
+    districtStats: DistrictStats | None = Field(
+        None,
+        description="Real estate and crime statistics for Prague districts (automatically added for Prague properties)"
+    )
+    
     # Property specifications - ALWAYS EXTRACT THESE FIELDS
     propertyDetails: PropertyInfo = Field(
         default_factory=PropertyInfo,
@@ -287,6 +310,16 @@ class ScrapeOutput(BaseModel):
                     "street": "Hostýnská",
                     "full": "Praha - Strašnice",
                     "pragueAdminDistrict": "Prague 10"
+                },
+                "districtStats": {
+                    "avgPricePerSqmCzk": 127800,
+                    "priceChangePercent": 2.6,
+                    "priceCategory": "medium",
+                    "crimeStats": {
+                        "violentCrimes": 125,
+                        "burglaries": 549,
+                        "fires": 10
+                    }
                 },
                 "propertyDetails": {
                     "area": "57 m²",

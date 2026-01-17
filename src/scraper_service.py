@@ -8,9 +8,12 @@ from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 
 try:
     from .prague_districts import get_prague_admin_district
+    from .prague_real_estate_data import get_info as get_district_info
 except ImportError:
     # Fallback if module not available
     def get_prague_admin_district(district_name: str):
+        return None
+    def get_district_info(district_no: int):
         return None
 
 
@@ -307,10 +310,31 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
         
         # Add Prague administrative district number if available
         prague_admin_district = None
+        district_stats = None
+        
         if city and city.lower() == 'praha' and district:
             prague_admin_district = get_prague_admin_district(district)
             if prague_admin_district:
                 Actor.log.info(f'✓ Mapped to {prague_admin_district}')
+                
+                # Get real estate and crime statistics for the district
+                try:
+                    district_number = int(prague_admin_district.split()[-1])
+                    district_info = get_district_info(district_number)
+                    if district_info:
+                        district_stats = {
+                            'avgPricePerSqmCzk': district_info.avg_price_per_sqm_czk,
+                            'priceChangePercent': district_info.price_change_percent,
+                            'priceCategory': district_info.price_category,
+                            'crimeStats': {
+                                'violentCrimes': district_info.crime_nasilna,
+                                'burglaries': district_info.crime_kradeze_vloupanim,
+                                'fires': district_info.crime_pozary
+                            }
+                        }
+                        Actor.log.info(f'✓ Added district statistics: Avg price {district_stats["avgPricePerSqmCzk"]} Kč/m², Crime: {district_stats["crimeStats"]["violentCrimes"]} violent')
+                except (ValueError, AttributeError, KeyError) as e:
+                    Actor.log.debug(f'Could not get district statistics: {e}')
     except Exception as e:
         Actor.log.error(f'Error extracting location: {e}')
     
@@ -369,6 +393,7 @@ async def extract_property_data(page: Any, url: str) -> dict[str, Any]:
             'street': street,
             'pragueAdminDistrict': prague_admin_district,
         },
+        'districtStats': district_stats,
         'propertyDetails': property_details,
         'attributes': attributes,
         'features': subtitle_features,
