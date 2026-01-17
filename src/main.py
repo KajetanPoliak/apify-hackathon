@@ -16,9 +16,6 @@ from openai import AsyncOpenAI
 from apify import Actor
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 
-# Load environment variables from .env file
-load_dotenv()
-
 
 def clean_text(text: str | None) -> str | None:
     """Clean and normalize text by removing extra whitespace."""

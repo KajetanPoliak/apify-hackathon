@@ -1,7 +1,20 @@
 from datetime import date, datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
+
+
+class DistrictInfo(BaseModel):
+    """Real estate and crime information for a Prague district"""
+    
+    district_no: int = Field(..., description="District number (1-10)")
+    avg_price_per_sqm_czk: int = Field(..., description="Average price per square meter in CZK")
+    price_change_percent: float = Field(..., description="Price change percentage")
+    price_category: Literal["premium", "high", "medium"] = Field(..., description="Price category")
+    crime_nasilna: int = Field(..., description="Violent crimes count")
+    crime_kradeze_vloupanim: int = Field(..., description="Burglary crimes count")
+    crime_pozary: int = Field(..., description="Fire incidents count")
 
 
 class SeverityLevel(str, Enum):
@@ -81,3 +94,70 @@ class ConsistencyCheckResult(BaseModel):
 
     # Quick summary
     summary: str = Field(..., description="One-line summary of the check")
+
+
+# Sreality.cz Scraper Models
+
+class SellerInfo(BaseModel):
+    """Information about the property seller/agent"""
+    
+    name: str | None = Field(None, description="Seller or agent name")
+    phone: str | None = Field(None, description="Contact phone number")
+    email: str | None = Field(None, description="Contact email address")
+
+
+class ScrapeOutput(BaseModel):
+    """Output model for scraped Sreality.cz property listing data"""
+    
+    # Core information
+    url: str = Field(..., description="URL of the scraped listing")
+    title: str | None = Field(None, description="Property listing title")
+    description: str | None = Field(None, description="Full property description text")
+    
+    # Pricing
+    price: str | None = Field(None, description="Property price (formatted with currency)")
+    priceType: Literal["rental", "sale"] | None = Field(
+        None, 
+        description="Type of listing: 'rental' for rent, 'sale' for purchase"
+    )
+    
+    # Location
+    location: str | None = Field(None, description="Property location (city, district)")
+    
+    # Property details
+    attributes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Dictionary of property attributes (area, energy rating, features, etc.)"
+    )
+    
+    # Contact information
+    seller: SellerInfo = Field(
+        default_factory=SellerInfo,
+        description="Seller/agent contact information"
+    )
+    
+    # Metadata
+    scrapedAt: str = Field(..., description="URL where the data was scraped from")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "url": "https://www.sreality.cz/detail/prodej/byt/3+kk/praha-zizkov-borivojova/1241056076",
+                "title": "Prodej bytu 3+kk 81 m² Bořivojova, Praha - Žižkov",
+                "description": "Novostavba podkrovního bytu o celkové ploše 81,8 m²...",
+                "price": "17 895 000 Kč",
+                "priceType": "sale",
+                "location": "Praha - Žižkov",
+                "attributes": {
+                    "Celková cena": "17 895 000 Kč",
+                    "Plocha": "Užitná plocha 81 m²",
+                    "Energetická náročnost": "Úsporná"
+                },
+                "seller": {
+                    "name": "Petr Hnátek",
+                    "phone": "+420 602 442 500",
+                    "email": "hnatek@stavba-design.cz"
+                },
+                "scrapedAt": "https://www.sreality.cz/detail/prodej/byt/3+kk/praha-zizkov-borivojova/1241056076"
+            }
+        }
