@@ -4,18 +4,9 @@ Data sources:
 - Prague Real Index (Q3 2024)
 - Czech Police Crime Data (2025)
 """
-from typing import TypedDict, Literal, Optional
+from typing import Literal
 
-
-class DistrictInfo(TypedDict):
-    """Type definition for district real estate information"""
-    district_no: int
-    avg_price_per_sqm_czk: int
-    price_change_percent: float
-    price_category: Literal["premium", "high", "medium"]
-    crime_nasilna: int
-    crime_kradeze_vloupanim: int
-    crime_pozary: int
+from src.models import DistrictInfo
 
 
 InfoType = Literal["avg_price", "price_change", "price_category", "all"]

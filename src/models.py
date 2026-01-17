@@ -1,7 +1,20 @@
 from datetime import date, datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
+
+
+class DistrictInfo(BaseModel):
+    """Real estate and crime information for a Prague district"""
+    
+    district_no: int = Field(..., description="District number (1-10)")
+    avg_price_per_sqm_czk: int = Field(..., description="Average price per square meter in CZK")
+    price_change_percent: float = Field(..., description="Price change percentage")
+    price_category: Literal["premium", "high", "medium"] = Field(..., description="Price category")
+    crime_nasilna: int = Field(..., description="Violent crimes count")
+    crime_kradeze_vloupanim: int = Field(..., description="Burglary crimes count")
+    crime_pozary: int = Field(..., description="Fire incidents count")
 
 
 class SeverityLevel(str, Enum):
