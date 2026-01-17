@@ -1,0 +1,62 @@
+{
+  "2025_500054": {
+    "district": 1,
+    "nasilna": 181,
+    "kradeze_vloupanim": 303,
+    "pozary": 8
+  },
+  "2025_500089": {
+    "district": 2,
+    "nasilna": 149,
+    "kradeze_vloupanim": 355,
+    "pozary": 3
+  },
+  "2025_500097": {
+    "district": 3,
+    "nasilna": 75,
+    "kradeze_vloupanim": 353,
+    "pozary": 2
+  },
+  "2025_500119": {
+    "district": 4,
+    "nasilna": 142,
+    "kradeze_vloupanim": 526,
+    "pozary": 12
+  },
+  "2025_500143": {
+    "district": 5,
+    "nasilna": 101,
+    "kradeze_vloupanim": 407,
+    "pozary": 6
+  },
+  "2025_500178": {
+    "district": 6,
+    "nasilna": 93,
+    "kradeze_vloupanim": 173,
+    "pozary": 4
+  },
+  "2025_500186": {
+    "district": 7,
+    "nasilna": 103,
+    "kradeze_vloupanim": 106,
+    "pozary": 4
+  },
+  "2025_500208": {
+    "district": 8,
+    "nasilna": 151,
+    "kradeze_vloupanim": 329,
+    "pozary": 16
+  },
+  "2025_500216": {
+    "district": 9,
+    "nasilna": 74,
+    "kradeze_vloupanim": 215,
+    "pozary": 4
+  },
+  "2025_500224": {
+    "district": 10,
+    "nasilna": 125,
+    "kradeze_vloupanim": 549,
+    "pozary": 10
+  }
+}
