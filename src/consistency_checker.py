@@ -13,7 +13,7 @@ from src.models import ConsistencyCheckResult, InconsistencyFinding, SeverityLev
 
 async def check_property_consistency(
     property_data: dict[str, Any],
-    model: str = "openrouter/openai/gpt-4o",
+    model: str = "openrouter/openai/gpt-5-mini",
     temperature: float = 0.7,
 ) -> ConsistencyCheckResult:
     """Check property listing for internal consistency.

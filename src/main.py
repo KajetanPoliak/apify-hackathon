@@ -197,7 +197,15 @@ async def main() -> None:
         ]
         
         max_requests = actor_input.get('maxRequestsPerCrawl', 100)
-        llm_model = actor_input.get('llmModel', 'openrouter/openai/gpt-4o')
+        # Get LLM model from input, defaulting to GPT-5-mini
+        # Handle empty string, None, or missing values
+        llm_model_input = actor_input.get('llmModel')
+        if not llm_model_input or llm_model_input.strip() == '':
+            llm_model = 'openrouter/openai/gpt-5-mini'
+            Actor.log.info('No llmModel specified in input, using default: openrouter/openai/gpt-5-mini')
+        else:
+            llm_model = llm_model_input
+            Actor.log.info(f'Using LLM model from input: {llm_model}')
         llm_temperature = actor_input.get('llmTemperature', 0.7)
         proxy_config = actor_input.get('proxyConfiguration', {'useApifyProxy': False})
         

@@ -93,7 +93,7 @@ def sanitize_json_schema_for_llm(schema: dict[str, Any]) -> dict[str, Any]:
 
 async def call_openrouter_llm(
     messages: list[dict[str, str]],
-    model: str = "openrouter/openai/gpt-4o",
+    model: str = "openrouter/openai/gpt-5-mini",
     temperature: float = 0.7,
     response_format: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
@@ -258,7 +258,7 @@ async def call_openrouter_llm(
 
 async def analyze_property_with_llm(
     property_data: dict[str, Any],
-    model: str = "openrouter/openai/gpt-4o",
+    model: str = "openrouter/openai/gpt-5-mini",
     temperature: float = 0.7,
 ) -> dict[str, Any] | None:
     """Analyze a property listing using LLM.
@@ -316,7 +316,7 @@ Respond in JSON format with keys: summary, sellingPoints (array), concerns (arra
 
 async def check_consistency_with_llm(
     property_data: dict[str, Any],
-    model: str = "openrouter/openai/gpt-4o",
+    model: str = "openrouter/openai/gpt-5-mini",
     temperature: float = 0.7,
 ) -> dict[str, Any] | None:
     """Check property listing consistency using LLM.
@@ -488,7 +488,7 @@ def parse_json_content(content: str | Any) -> dict[str, Any] | None:
 
 async def convert_scraped_data_to_listing_input(
     property_data: dict[str, Any],
-    model: str = "openrouter/openai/gpt-4o",
+    model: str = "openrouter/openai/gpt-5-mini",
     temperature: float = 0.7,
 ) -> ListingInput | None:
     """Convert scraped property data to ListingInput format using structured outputs.
@@ -729,7 +729,7 @@ Always return valid JSON matching the schema exactly with all constraints satisf
 
 async def check_consistency_with_structured_output(
     listing_input: ListingInput,
-    model: str = "openrouter/openai/gpt-4o",
+    model: str = "openrouter/openai/gpt-5-mini",
     temperature: float = 0.7,
 ) -> ConsistencyCheckResult | None:
     """Check property listing consistency using structured outputs.
