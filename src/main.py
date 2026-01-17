@@ -214,44 +214,97 @@ async def main() -> None:
             except Exception as e:
                 Actor.log.debug(f'Error extracting title: {e}')
             
-            # Extract price first (usually prominent at top)
+            # Extract price (handles both rental and sale prices)
             price = None
+            price_type = None
             try:
-                # Look for price patterns - usually "X Kč/měsíc" or "X Kč"
+                # Look for price patterns - rental: "X Kč/měsíc" or sale: "X Kč"
                 page_text = await page.content()
-                # Try to find price with specific pattern
-                price_match = re.search(r'(\d+[\s​]*\d*[\s​]*\d*[\s​]*K[čc]/měsíc)', page_text)
-                if price_match:
-                    price = clean_text(price_match.group(1))
+                
+                # Try rental price first
+                rental_match = re.search(r'(\d+[\s​]*\d*[\s​]*\d*[\s​]*K[čc]/měsíc)', page_text)
+                if rental_match:
+                    price = clean_text(rental_match.group(1))
+                    price_type = 'rental'
                 else:
-                    # Fallback: look for price element
-                    price_elems = await page.query_selector_all('*')
-                    for elem in price_elems[:50]:  # Check first 50 elements
-                        text = await elem.text_content()
-                        if text and re.search(r'\d+\s*Kč/měsíc', text) and len(text) < 50:
-                            price = clean_text(text)
-                            if 'Kč/měsíc' in price:
-                                break
+                    # Try sale price - look for large numbers with Kč (captures full price with multiple digit groups)
+                    sale_match = re.search(r'(\d+(?:[\s​]*\d+)*[\s​]*K[čc])', page_text)
+                    if sale_match:
+                        raw_price = sale_match.group(1)
+                        # Only accept prices with at least 6 digits (over 100k)
+                        digits_only = re.sub(r'[^\d]', '', raw_price)
+                        if len(digits_only) >= 6:
+                            price = clean_text(raw_price)
+                            price_type = 'sale'
+                
+                # Fallback: find price element visually
+                if not price:
+                    # Look for elements with large price-like text
+                    price_candidates = await page.query_selector_all('span, div, p')
+                    for elem in price_candidates[:100]:
+                        try:
+                            text = await elem.text_content()
+                            if text:
+                                text = text.strip()
+                                # Check for rental price
+                                if re.match(r'^\d+\s*Kč/měsíc$', text):
+                                    price = clean_text(text)
+                                    price_type = 'rental'
+                                    break
+                                # Check for sale price (at least 6 digits)
+                                elif re.match(r'^\d+[\s​]*\d+[\s​]*\d+\s*Kč$', text):
+                                    price = clean_text(text)
+                                    price_type = 'sale'
+                                    break
+                        except:
+                            continue
+                
+                if price:
+                    Actor.log.info(f'Found {price_type} price: {price}')
+                    
             except Exception as e:
                 Actor.log.debug(f'Error extracting price: {e}')
             
-            # Extract description - the main property description text (usually longer paragraph)
+            # Extract description - the main property description text
             description = None
             try:
-                # Get all paragraphs and find the longest substantial one
-                paragraphs = await page.query_selector_all('p')
-                longest_text = ""
+                # Strategy 1: Look for description in structured elements
+                desc_candidates = []
                 
-                for p in paragraphs:
-                    text = clean_text(await p.text_content())
-                    if text and len(text) > len(longest_text) and len(text) > 100:
-                        # Make sure it's actual description, not footer/legal text
-                        if not any(skip in text.lower() for skip in ['seznam.cz, a.s.', 'cookies', 'souhlas']):
-                            longest_text = text
+                # Try to find the main description block (usually after title/price)
+                all_text_blocks = await page.query_selector_all('p, div[class*="description"], section')
                 
-                if longest_text:
-                    description = longest_text
-                    Actor.log.debug(f'Found description: {len(description)} characters')
+                for block in all_text_blocks:
+                    try:
+                        text = await block.text_content()
+                        if text:
+                            text = clean_text(text)
+                            # Valid description should be substantial and not footer/legal
+                            if (len(text) > 150 and len(text) < 5000 and
+                                not any(skip in text.lower() for skip in 
+                                       ['seznam.cz, a.s.', 'cookies', 'souhlas', 'ochrana údajů', 
+                                        'smluvní podmínky', 'jakékoliv užití obsahu'])):
+                                desc_candidates.append(text)
+                    except:
+                        continue
+                
+                # Get the longest valid description
+                if desc_candidates:
+                    description = max(desc_candidates, key=len)
+                    Actor.log.info(f'Found description: {len(description)} characters')
+                else:
+                    # Fallback: combine multiple smaller paragraphs
+                    paragraphs = await page.query_selector_all('p')
+                    text_parts = []
+                    for p in paragraphs[:20]:  # Check first 20 paragraphs
+                        text = clean_text(await p.text_content())
+                        if text and len(text) > 50 and len(text) < 1000:
+                            if not any(skip in text.lower() for skip in ['seznam.cz', 'cookies']):
+                                text_parts.append(text)
+                    
+                    if text_parts:
+                        # Take the first substantial paragraph
+                        description = text_parts[0] if text_parts else None
                             
             except Exception as e:
                 Actor.log.debug(f'Error extracting description: {e}')
@@ -265,6 +318,14 @@ async def main() -> None:
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(page_content, 'html.parser')
                 attributes = extract_property_details(soup)
+                
+                # If price wasn't found or seems wrong, try to get it from attributes
+                if attributes and not price or (price and len(re.sub(r'[^\d]', '', price)) < 6):
+                    # Look for "Celková cena" or "Cena" in attributes for sale listings
+                    if 'Celková cena' in attributes:
+                        price = clean_text(attributes['Celková cena'])
+                        price_type = 'sale'
+                        Actor.log.info(f'Corrected price from attributes: {price}')
             except Exception as e:
                 Actor.log.debug(f'Error extracting attributes: {e}')
             
@@ -305,6 +366,7 @@ async def main() -> None:
                 'title': title,
                 'description': description,
                 'price': price,
+                'priceType': price_type,  # 'rental' or 'sale'
                 'location': ' '.join(location_parts) if location_parts else None,
                 'attributes': attributes,
                 'seller': {
