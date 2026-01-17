@@ -90,7 +90,7 @@ def main():
     print(f"""
 The complete workflow is working:
 
-1. ✓ Data scraped from Sreality.cz
+1. ✓ Data scraped from Bezrealitky.cz
 2. ✓ Validated with Pydantic ScrapeOutput model
 3. ✓ Dumped to dict with model_dump()
 4. ✓ Stored to Apify dataset (storage/datasets/default/)
