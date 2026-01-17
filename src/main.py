@@ -19,6 +19,7 @@ from src.llm_service import (
     check_consistency_with_structured_output,
 )
 from src.mock_data import generate_mock_inconsistency_results, generate_mock_result_for_property
+from src.models import ConsistencyCheckResult
 from src.scraper_service import extract_property_data, handle_consent_page
 
 
@@ -41,7 +42,7 @@ async def process_property(
     llm_model: str,
     llm_temperature: float,
     crawler_config: dict[str, Any],
-) -> None:
+) -> ConsistencyCheckResult | None:
     """Process a single property: scrape, analyze, and check consistency.
     
     Args:
@@ -75,7 +76,7 @@ async def process_property(
         # Fallback to mock data if scraping fails
         Actor.log.warning(f'Scraping failed for {url}, outputting mock inconsistency results')
         await push_mock_results_fallback(context)
-        return
+        return None
     
     # Step 2: Convert scraped data to ListingInput using structured outputs
     listing_input = None
@@ -175,6 +176,9 @@ async def process_property(
     # Step 5: Push property data to dataset
     await context.push_data(property_data)
     Actor.log.info(f'Successfully processed property: {url}')
+    
+    # Return consistency result for statistics tracking
+    return consistency_result
 
 
 async def main() -> None:
@@ -235,28 +239,113 @@ async def main() -> None:
         # Create crawler
         crawler = PlaywrightCrawler(**crawler_config)
         
+        # Track inconsistency analysis statistics
+        inconsistency_stats = {
+            'total_properties_processed': 0,
+            'total_inconsistencies_found': 0,
+            'properties_with_inconsistencies': 0,
+            'properties_consistent': 0,
+            'inconsistency_checks_failed': 0,
+        }
+        
         @crawler.router.default_handler
         async def request_handler(context: PlaywrightCrawlingContext) -> None:
             """Handle each Bezrealitky detail page request."""
             try:
-                await process_property(
+                # Process property and get inconsistency result
+                consistency_result = await process_property(
                     context=context,
                     llm_model=llm_model,
                     llm_temperature=llm_temperature,
                     crawler_config=crawler_config,
                 )
+                
+                # Update inconsistency statistics
+                inconsistency_stats['total_properties_processed'] += 1
+                if consistency_result:
+                    inconsistency_stats['total_inconsistencies_found'] += consistency_result.total_inconsistencies
+                    if consistency_result.is_consistent:
+                        inconsistency_stats['properties_consistent'] += 1
+                    else:
+                        inconsistency_stats['properties_with_inconsistencies'] += 1
+                else:
+                    inconsistency_stats['inconsistency_checks_failed'] += 1
+                    
             except Exception as e:
                 Actor.log.exception(f'Error processing property: {e}')
                 # Fallback to mock data on any error
                 Actor.log.warning('Processing failed, outputting mock inconsistency results')
                 await push_mock_results_fallback(context)
+                inconsistency_stats['inconsistency_checks_failed'] += 1
         
         # Run the crawler
         try:
             await crawler.run(start_urls)
             Actor.log.info('Scraping completed successfully!')
+            
+            # Push final completion summary to ensure end results are stored
+            try:
+                from datetime import datetime
+                
+                completion_summary = {
+                    'type': 'completion_summary',
+                    'status': 'success',
+                    'completed_at': datetime.now().isoformat(),
+                    'total_urls_processed': len(start_urls),
+                    'llm_model_used': llm_model,
+                    'llm_temperature': llm_temperature,
+                    'max_requests_per_crawl': max_requests,
+                    'inconsistency_analysis': {
+                        'total_properties_processed': inconsistency_stats['total_properties_processed'],
+                        'total_inconsistencies_found': inconsistency_stats['total_inconsistencies_found'],
+                        'properties_with_inconsistencies': inconsistency_stats['properties_with_inconsistencies'],
+                        'properties_consistent': inconsistency_stats['properties_consistent'],
+                        'inconsistency_checks_failed': inconsistency_stats['inconsistency_checks_failed'],
+                        'average_inconsistencies_per_property': (
+                            inconsistency_stats['total_inconsistencies_found'] / inconsistency_stats['total_properties_processed']
+                            if inconsistency_stats['total_properties_processed'] > 0 else 0
+                        ),
+                    },
+                    'message': f'Successfully completed processing {len(start_urls)} URL(s). '
+                               f'Found {inconsistency_stats["total_inconsistencies_found"]} total inconsistencies '
+                               f'across {inconsistency_stats["total_properties_processed"]} properties.'
+                }
+                
+                await Actor.push_data(completion_summary)
+                Actor.log.info(f'Completion summary pushed: {completion_summary["message"]}')
+            except Exception as e:
+                Actor.log.warning(f'Could not push completion summary: {e}')
+                # Try to push a minimal completion status
+                try:
+                    from datetime import datetime
+                    await Actor.push_data({
+                        'type': 'completion_summary',
+                        'status': 'success',
+                        'completed_at': datetime.now().isoformat(),
+                        'total_urls_processed': len(start_urls),
+                        'message': 'Processing completed successfully'
+                    })
+                except Exception:
+                    Actor.log.debug('Could not push minimal completion summary')
+                    
         except Exception as e:
             Actor.log.exception(f'Error during crawler execution: {e}')
             Actor.log.warning('Crawler failed, outputting mock inconsistency results')
             # Output mock data as fallback
             await push_mock_results_fallback(context=None)
+            
+            # Push failure summary to ensure error status is recorded
+            try:
+                from datetime import datetime
+                await Actor.push_data({
+                    'type': 'completion_summary',
+                    'status': 'error',
+                    'completed_at': datetime.now().isoformat(),
+                    'error': str(e),
+                    'total_urls_processed': len(start_urls),
+                    'llm_model_used': llm_model,
+                    'message': f'Processing failed with error: {str(e)}'
+                })
+                Actor.log.info('Error summary pushed to dataset')
+            except Exception as e2:
+                Actor.log.debug(f'Could not push error summary: {e2}')
