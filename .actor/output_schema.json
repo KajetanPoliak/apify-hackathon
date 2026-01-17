@@ -1,11 +1,13 @@
 {
     "actorOutputSchemaVersion": 1,
-    "title": "Output schema of the files scraper",
+    "title": "Sreality Scraper Output",
+    "description": "Output from the Sreality.cz property listing scraper",
     "properties": {
-        "overview": {
+        "dataset": {
             "type": "string",
-            "title": "Overview",
-            "template": "{{links.apiDefaultDatasetUrl}}/items?view=overview"
+            "title": "Property Listings Dataset",
+            "description": "Dataset containing scraped property listings from Sreality.cz",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
         }
     }
 }

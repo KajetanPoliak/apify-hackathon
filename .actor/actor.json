@@ -1,13 +1,13 @@
 {
 	"actorSpecification": 1,
 	"name": "verihome",
-	"title": "Getting started with Python Crawlee and BeautifulSoup",
-	"description": "Scrapes titles of websites using Crawlee and BeautifulSoup.",
+	"title": "Sreality.cz Detail Page Scraper",
+	"description": "Scrapes detailed property information from Sreality.cz listing pages including description, price, attributes, and seller information.",
 	"version": "0.0",
 	"buildTag": "latest",
 	"meta": {
 		"templateId": "python-crawlee-beautifulsoup",
-		"generatedBy": "<FILL-IN-MODEL>"
+		"generatedBy": "Claude Sonnet 4.5"
 	},
 	"input": "./input_schema.json",
 	"output": "./output_schema.json",

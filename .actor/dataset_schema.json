@@ -1,34 +1,90 @@
 {
     "actorSpecification": 1,
-    "fields": {},
+    "fields": {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "URL of the scraped listing"
+            },
+            "title": {
+                "type": "string",
+                "description": "Property title"
+            },
+            "description": {
+                "type": "string",
+                "description": "Detailed property description"
+            },
+            "price": {
+                "type": "string",
+                "description": "Property price"
+            },
+            "location": {
+                "type": "string",
+                "description": "Property location"
+            },
+            "attributes": {
+                "type": "object",
+                "description": "Additional property attributes"
+            },
+            "seller": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Seller name"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "Seller phone number"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Seller email address"
+                    }
+                }
+            },
+            "scrapedAt": {
+                "type": "string",
+                "description": "Timestamp when the data was scraped"
+            }
+        }
+    },
     "views": {
         "overview": {
-            "title": "Overview",
+            "title": "Property Listings Overview",
+            "description": "Overview of scraped property listings",
             "transformation": {
-                "fields": ["title", "url", "h1s", "h2s", "h3s"]
+                "fields": [
+                    "title",
+                    "price",
+                    "location",
+                    "description",
+                    "url"
+                ]
             },
             "display": {
                 "component": "table",
                 "properties": {
                     "title": {
-                        "label": "Title",
+                        "label": "Property Title",
+                        "format": "text"
+                    },
+                    "price": {
+                        "label": "Price",
+                        "format": "text"
+                    },
+                    "location": {
+                        "label": "Location",
+                        "format": "text"
+                    },
+                    "description": {
+                        "label": "Description",
                         "format": "text"
                     },
                     "url": {
-                        "label": "URL",
+                        "label": "Listing URL",
                         "format": "link"
-                    },
-                    "h1s": {
-                        "label": "H1s",
-                        "format": "array"
-                    },
-                    "h2s": {
-                        "label": "H2s",
-                        "format": "array"
-                    },
-                    "h3s": {
-                        "label": "H3s",
-                        "format": "array"
                     }
                 }
             }

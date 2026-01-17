@@ -1,114 +1,147 @@
-# Python Crawlee & BeautifulSoup Actor Template
+# Sreality.cz Property Listing Scraper
 
-<!-- This is an Apify template readme -->
+This Apify Actor scrapes detailed property information from Sreality.cz listing pages. It extracts comprehensive data including property descriptions, prices, locations, attributes, and seller information.
 
-This template example was built with [Crawlee for Python](https://crawlee.dev/python) to scrape data from a website using [Beautiful Soup](https://pypi.org/project/beautifulsoup4/) wrapped into [BeautifulSoupCrawler](https://crawlee.dev/python/api/class/BeautifulSoupCrawler).
+## Features
 
-## Quick Start
+- **Comprehensive Data Extraction**: Scrapes property title, description, price, location, attributes, and seller details
+- **JavaScript Rendering**: Uses Playwright crawler to handle dynamic content
+- **Cookie Consent Handling**: Automatically attempts to handle Seznam.cz consent dialogs
+- **Structured Output**: Returns well-formatted JSON data with all property details
 
-Once you've installed the dependencies, start the Actor:
+## Input
 
-```bash
-apify run
+The actor accepts the following input parameters:
+
+```json
+{
+  "startUrls": [
+    {
+      "url": "https://www.sreality.cz/detail/pronajem/byt/4+1/praha-stare-mesto-martinska/3766952780"
+    }
+  ],
+  "maxRequestsPerCrawl": 100,
+  "proxyConfiguration": {
+    "useApifyProxy": false
+  }
+}
 ```
 
-Once your Actor is ready, you can push it to the Apify Console:
+### Input Parameters
 
+- **startUrls** (required): Array of Sreality.cz detail page URLs to scrape
+- **maxRequestsPerCrawl** (optional): Maximum number of pages to scrape (default: 100)
+- **proxyConfiguration** (optional): Proxy settings for bypassing anti-bot protection
+
+## Output
+
+The actor stores data in the default dataset. Each item contains:
+
+```json
+{
+  "url": "https://www.sreality.cz/detail/...",
+  "title": "Pronájem bytu 4+1 180 m² Martinská, Praha - Staré Město",
+  "description": "Klasický, prostorný, 3 ložnicový...",
+  "price": "55 000 Kč/měsíc",
+  "location": "Praha - Staré Město",
+  "attributes": {
+    "Cena": "55 000 Kč/měsíc",
+    "Plocha": "Užitná plocha 180 m²",
+    "Energetická náročnost": "Mimořádně nehospodárná",
+    "Stavba": "Smíšená, Ve velmi dobrém stavu, 2. podlaží z 6",
+    ...
+  },
+  "seller": {
+    "name": "Marcela Skalníková",
+    "phone": "+420 606 682 820",
+    "email": "info@primeproperty.cz"
+  },
+  "scrapedAt": "https://www.sreality.cz/detail/..."
+}
+```
+
+## Usage
+
+### Running Locally
+
+1. Install dependencies:
 ```bash
-apify login # first, you need to log in if you haven't already done so
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+```
 
+2. Configure input in `storage/key_value_stores/default/INPUT.json`
+
+3. Run the actor:
+```bash
+python -m src
+```
+
+### Running on Apify Platform
+
+1. Deploy the actor:
+```bash
 apify push
 ```
 
-## Project Structure
+2. Run from Apify Console with your desired input
 
-```text
-.actor/
-├── actor.json # Actor config: name, version, env vars, runtime settings
-├── dataset_schena.json # Structure and representation of data produced by an Actor
-├── input_schema.json # Input validation & Console form definition
-└── output_schema.json # Specifies where an Actor stores its output
-src/
-└── main.py # Actor entry point and orchestrator
-storage/ # Local storage (mirrors Cloud during development)
-├── datasets/ # Output items (JSON objects)
-├── key_value_stores/ # Files, config, INPUT
-└── request_queues/ # Pending crawl requests
-Dockerfile # Container image definition
+## Known Limitations
+
+- **Anti-Bot Protection**: Sreality.cz uses sophisticated bot detection. For production use, it's recommended to:
+  - Use Apify Proxy with residential IPs
+  - Add random delays between requests
+  - Rotate user agents
+  
+- **Cookie Consent**: The Seznam.cz consent dialog handling may occasionally fail. The actor includes multiple strategies to handle it, but success rates may vary.
+
+## Technical Details
+
+- **Crawler**: PlaywrightCrawler (handles JavaScript-rendered content)
+- **Browser**: Chromium (headless mode)
+- **Language**: Python 3.10+
+- **Dependencies**: Apify SDK, Crawlee, Playwright
+
+## Data Extracted
+
+### Property Information
+- Title and full description
+- Price (monthly rent or sale price)
+- Location (district, street)
+- Property type and size
+- Energy efficiency rating
+- Building condition and floor
+- Amenities and features
+
+### Location Context
+- Nearby schools, shops, restaurants
+- Public transport connections
+- Distance to key landmarks
+
+### Seller Information
+- Agent/Company name
+- Contact phone
+- Contact email
+- Agency details
+
+## Example URLs
+
+Try these example Sreality.cz listings:
+
+```
+https://www.sreality.cz/detail/pronajem/byt/4+1/praha-stare-mesto-martinska/3766952780
+https://www.sreality.cz/detail/prodej/dum/rodinny/velvary-velvary-tyrsova/2882372428
+https://www.sreality.cz/detail/prodej/byt/4+kk/praha-smichov-vltavska/3683189580
 ```
 
-For more information, see the [Actor definition](https://docs.apify.com/platform/actors/development/actor-definition) documentation.
+## Support
 
-## How it works
+For issues or questions:
+- Check the Apify Console logs for detailed error messages
+- Review the actor's run history for troubleshooting
+- Ensure you're using valid Sreality.cz detail page URLs
 
-This code is a Python script that uses BeautifulSoup to scrape data from a website. It then stores the website titles in a dataset.
+## License
 
-- The crawler starts with URLs provided from the input `startUrls` field defined by the input schema. Number of scraped pages is limited by `maxPagesPerCrawl` field from the input schema.
-- The crawler uses `requestHandler` for each URL to extract the data from the page with the BeautifulSoup library and to save the title and URL of each page to the dataset. It also logs out each result that is being saved.
-
-## What's included
-
-- **[Apify SDK](https://docs.apify.com/sdk/python/)** - toolkit for building [Actors](https://apify.com/actors)
-- **[Crawlee for Python](https://crawlee.dev/python/)** - web scraping and browser automation library
-- **[Input schema](https://docs.apify.com/platform/actors/development/input-schema)** - define and easily validate a schema for your Actor's input
-- **[Dataset](https://docs.apify.com/sdk/python/docs/concepts/storages#working-with-datasets)** - store structured data where each object stored has the same attributes
-- **[Beautiful Soup](https://pypi.org/project/beautifulsoup4/)** - a library for pulling data out of HTML and XML files
-- **[Proxy configuration](https://docs.apify.com/platform/proxy)** - rotate IP addresses to prevent blocking
-
-## Resources
-
-- [Quick Start](https://docs.apify.com/platform/actors/development/quick-start) guide for building your first Actor
-- [Video introduction to Python SDK](https://www.youtube.com/watch?v=C8DmvJQS3jk)
-- [Webinar introducing to Crawlee for Python](https://www.youtube.com/live/ip8Ii0eLfRY)
-- [Apify Python SDK documentation](https://docs.apify.com/sdk/python/)
-- [Crawlee for Python documentation](https://crawlee.dev/python/docs/quick-start)
-- [Python tutorials in Academy](https://docs.apify.com/academy/python)
-- [Integration with Zapier](https://apify.com/integrations), Make, Google Drive and others
-- [Video guide on getting data using Apify API](https://www.youtube.com/watch?v=ViYYDHSBAKM)
-
-## Creating Actors with templates
-
-[How to create Apify Actors with web scraping code templates](https://www.youtube.com/watch?v=u-i-Korzf8w)
-
-
-## Getting started
-
-For complete information [see this article](https://docs.apify.com/platform/actors/development#build-actor-locally). To run the Actor use the following command:
-
-```bash
-apify run
-```
-
-## Deploy to Apify
-
-### Connect Git repository to Apify
-
-If you've created a Git repository for the project, you can easily connect to Apify:
-
-1. Go to [Actor creation page](https://console.apify.com/actors/new)
-2. Click on **Link Git Repository** button
-
-### Push project on your local machine to Apify
-
-You can also deploy the project on your local machine to Apify without the need for the Git repository.
-
-1. Log in to Apify. You will need to provide your [Apify API Token](https://console.apify.com/account/integrations) to complete this action.
-
-    ```bash
-    apify login
-    ```
-
-2. Deploy your Actor. This command will deploy and build the Actor on the Apify Platform. You can find your newly created Actor under [Actors -> My Actors](https://console.apify.com/actors?tab=my).
-
-    ```bash
-    apify push
-    ```
-
-## Documentation reference
-
-To learn more about Apify and Actors, take a look at the following resources:
-
-- [Apify SDK for JavaScript documentation](https://docs.apify.com/sdk/js)
-- [Apify SDK for Python documentation](https://docs.apify.com/sdk/python)
-- [Apify Platform documentation](https://docs.apify.com/platform)
-- [Join our developer community on Discord](https://discord.com/invite/jyEM2PRvMU)
+This actor is provided as-is for educational and personal use. Always respect the website's Terms of Service and robots.txt when scraping.

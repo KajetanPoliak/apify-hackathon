@@ -1,15 +1,44 @@
 {
-    "title": "Python Crawlee BeautifulSoup Scraper",
-    "type": "object",
-    "schemaVersion": 1,
-    "properties": {
-        "start_urls": {
-            "title": "Start URLs",
-            "type": "array",
-            "description": "URLs to start with",
-            "prefill": [{ "url": "https://apify.com" }],
-            "editor": "requestListSources"
+  "title": "Sreality Detail Scraper Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Sreality Detail URLs",
+      "type": "array",
+      "editor": "requestListSources",
+      "description": "List of Sreality.cz detail page URLs to scrape (e.g., https://www.sreality.cz/detail/...)",
+      "default": [
+        {
+          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/velvary-velvary-tyrsova/2882372428"
         }
+      ],
+      "prefill": [
+        {
+          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/velvary-velvary-tyrsova/2882372428"
+        },
+        {
+          "url": "https://www.sreality.cz/detail/prodej/byt/4+kk/praha-smichov-vltavska/3683189580"
+        }
+      ]
     },
-    "required": ["start_urls"]
+    "maxRequestsPerCrawl": {
+      "title": "Max Requests",
+      "type": "integer",
+      "description": "Maximum number of detail pages to scrape",
+      "default": 100,
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "proxyConfiguration": {
+      "title": "Proxy Configuration",
+      "type": "object",
+      "editor": "proxy",
+      "description": "Proxy settings for scraping (recommended for production)",
+      "default": {
+        "useApifyProxy": false
+      }
+    }
+  },
+  "required": ["startUrls"]
 }
