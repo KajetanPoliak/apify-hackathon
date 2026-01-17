@@ -16,9 +16,6 @@ from dotenv import load_dotenv
 from apify import Actor
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 
-# Load environment variables from .env file
-load_dotenv()
-
 
 def clean_text(text: str | None) -> str | None:
     """Clean and normalize text by removing extra whitespace."""
@@ -623,37 +620,6 @@ async def main() -> None:
             Actor.log.info(f'Extracted: {title}')
             if description:
                 Actor.log.info(f'Description preview: {description[:100]}...')
-            
-            # Optionally analyze with LLM if enabled
-            if use_llm:
-                try:
-                    Actor.log.info('Analyzing property with LLM...')
-                    llm_analysis = await analyze_property_with_llm(
-                        property_data=data,
-                        model=gemini_model,
-                        temperature=llm_temperature,
-                    )
-                    
-                    if llm_analysis:
-                        # Extract the response content
-                        if 'choices' in llm_analysis and len(llm_analysis['choices']) > 0:
-                            content = llm_analysis['choices'][0].get('message', {}).get('content', '')
-                            try:
-                                # Try to parse as JSON if it's structured
-                                analysis_json = json.loads(content)
-                                data['llmAnalysis'] = analysis_json
-                            except json.JSONDecodeError:
-                                # If not JSON, store as text
-                                data['llmAnalysis'] = {'text': content}
-                            
-                            Actor.log.info('LLM analysis completed successfully')
-                        else:
-                            Actor.log.warning('LLM response did not contain expected structure')
-                    else:
-                        Actor.log.warning('LLM analysis returned no result')
-                except Exception as e:
-                    Actor.log.exception(f'Error during LLM analysis: {e}')
-                    # Continue even if LLM fails
             
             # Store data to dataset
             await context.push_data(data)
