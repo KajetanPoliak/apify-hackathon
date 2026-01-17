@@ -13,6 +13,7 @@ class DistrictInfo(BaseModel):
     price_change_percent: float = Field(..., description="Price change percentage")
     price_category: Literal["premium", "high", "medium"] = Field(..., description="Price category")
     population: int = Field(..., description="Number of citizens in the district")
+    kebab_index: int = Field(..., description="Number of high-quality kebab restaurants in the district (rating > 4.5, reviews > 100)")
     crime_nasilna: int = Field(..., description="Violent crimes count")
     crime_kradeze_vloupanim: int = Field(..., description="Burglary crimes count")
     crime_pozary: int = Field(..., description="Fire incidents count")
