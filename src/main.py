@@ -13,7 +13,11 @@ from apify import Actor
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 
 from src.consistency_checker import check_property_consistency
-from src.llm_service import analyze_property_with_llm
+from src.llm_service import (
+    analyze_property_with_llm,
+    convert_scraped_data_to_listing_input,
+    check_consistency_with_structured_output,
+)
 from src.mock_data import generate_mock_inconsistency_results, generate_mock_result_for_property
 from src.scraper_service import extract_property_data, handle_consent_page
 
@@ -61,68 +65,102 @@ async def process_property(
             await context.push_data(result.model_dump(mode='json'))
         return
     
-    # Step 2: Analyze with LLM
+    # Step 2: Convert scraped data to ListingInput using structured outputs
+    listing_input = None
     try:
-        Actor.log.info('Analyzing property with LLM...')
-        llm_analysis = await analyze_property_with_llm(
+        Actor.log.info('Converting scraped data to ListingInput format...')
+        listing_input = await convert_scraped_data_to_listing_input(
             property_data=property_data,
             model=llm_model,
             temperature=llm_temperature,
         )
         
-        if llm_analysis and 'choices' in llm_analysis and len(llm_analysis['choices']) > 0:
-            content = llm_analysis['choices'][0].get('message', {}).get('content', '')
-            try:
-                analysis_json = json.loads(content)
-                property_data['llmAnalysis'] = analysis_json
-                Actor.log.info('LLM analysis completed successfully')
-            except json.JSONDecodeError:
-                property_data['llmAnalysis'] = {'text': content}
-                Actor.log.info('LLM response stored as text')
+        if listing_input:
+            # Print the ListingInput
+            Actor.log.info('=' * 80)
+            Actor.log.info('LISTING INPUT (Structured Output):')
+            Actor.log.info('=' * 80)
+            Actor.log.info(json.dumps(listing_input.model_dump(mode='json'), indent=2, ensure_ascii=False))
+            Actor.log.info('=' * 80)
+            
+            # Store the ListingInput
+            await context.push_data({
+                'type': 'listing_input',
+                'data': listing_input.model_dump(mode='json'),
+            })
+            Actor.log.info(f'ListingInput stored: {listing_input.listing_id}')
         else:
-            Actor.log.warning('LLM analysis returned no result')
-            property_data['llmAnalysisFailed'] = True
+            Actor.log.warning('Failed to convert scraped data to ListingInput')
             
     except Exception as e:
-        Actor.log.exception(f'Error during LLM analysis: {e}')
-        property_data['llmAnalysisFailed'] = True
+        Actor.log.exception(f'Error converting to ListingInput: {e}')
     
-    # Step 3: Check consistency (always runs, falls back to mock if LLM fails)
-    try:
-        Actor.log.info('Checking property consistency...')
-        consistency_result = await check_property_consistency(
-            property_data=property_data,
-            model=llm_model,
-            temperature=llm_temperature,
-        )
-        
-        # Push consistency result to dataset
-        await context.push_data(consistency_result.model_dump(mode='json'))
-        Actor.log.info(f'Consistency check completed: {consistency_result.summary}')
-        
-        # Add consistency result reference to property data
+    # Step 3: Check consistency with structured outputs (if ListingInput was created)
+    consistency_result = None
+    if listing_input:
+        try:
+            Actor.log.info('Checking property consistency with structured outputs...')
+            consistency_result = await check_consistency_with_structured_output(
+                listing_input=listing_input,
+                model=llm_model,
+                temperature=llm_temperature,
+            )
+            
+            if consistency_result:
+                # Print the ConsistencyCheckResult
+                Actor.log.info('=' * 80)
+                Actor.log.info('CONSISTENCY CHECK RESULT (Structured Output):')
+                Actor.log.info('=' * 80)
+                Actor.log.info(json.dumps(consistency_result.model_dump(mode='json'), indent=2, ensure_ascii=False))
+                Actor.log.info('=' * 80)
+                
+                # Store the ConsistencyCheckResult
+                await context.push_data(consistency_result.model_dump(mode='json'))
+                Actor.log.info(f'ConsistencyCheckResult stored: {consistency_result.total_inconsistencies} inconsistencies found')
+            else:
+                Actor.log.warning('Failed to check consistency with structured outputs')
+                
+        except Exception as e:
+            Actor.log.exception(f'Error during structured consistency check: {e}')
+    
+    # Step 4: Fallback to old consistency check if structured output failed
+    if not consistency_result:
+        try:
+            Actor.log.info('Falling back to legacy consistency check...')
+            consistency_result = await check_property_consistency(
+                property_data=property_data,
+                model=llm_model,
+                temperature=llm_temperature,
+            )
+            
+            # Push consistency result to dataset
+            await context.push_data(consistency_result.model_dump(mode='json'))
+            Actor.log.info(f'Legacy consistency check completed: {consistency_result.summary}')
+            
+        except Exception as e:
+            Actor.log.exception(f'Error during legacy consistency check: {e}')
+            # Fallback to mock data
+            Actor.log.warning('Consistency check failed, outputting mock inconsistency results')
+            mock_result = generate_mock_result_for_property(
+                url=url,
+                property_address=property_data.get('location', {}).get('full') or property_data.get('title') or url,
+                title=property_data.get('title'),
+                description=property_data.get('description'),
+                price=property_data.get('price'),
+                reason="Consistency check failed",
+            )
+            await context.push_data(mock_result.model_dump(mode='json'))
+            consistency_result = mock_result
+    
+    # Add consistency result reference to property data if available
+    if consistency_result:
         property_data['consistencyCheck'] = {
             'listing_id': consistency_result.listing_id,
             'total_inconsistencies': consistency_result.total_inconsistencies,
             'is_consistent': consistency_result.is_consistent,
         }
-        
-    except Exception as e:
-        Actor.log.exception(f'Error during consistency check: {e}')
-        # Fallback to mock data
-        Actor.log.warning('Consistency check failed, outputting mock inconsistency results')
-        mock_result = generate_mock_result_for_property(
-            url=url,
-            property_address=property_data.get('location', {}).get('full') or property_data.get('title') or url,
-            title=property_data.get('title'),
-            description=property_data.get('description'),
-            price=property_data.get('price'),
-            reason="Consistency check failed",
-        )
-        await context.push_data(mock_result.model_dump(mode='json'))
-        property_data['consistencyCheckFailed'] = True
     
-    # Step 4: Push property data to dataset
+    # Step 5: Push property data to dataset
     await context.push_data(property_data)
     Actor.log.info(f'Successfully processed property: {url}')
 
