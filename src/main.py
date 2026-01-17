@@ -56,7 +56,7 @@ async def main() -> None:
         })
 
         # Exit successfully
-        await Actor.exit('Successfully completed processing')
+        await Actor.exit(exit_code=0, status_message='Successfully completed processing')
 
 
 if __name__ == '__main__':
