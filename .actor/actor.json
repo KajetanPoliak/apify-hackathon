@@ -1,15 +1,18 @@
 {
-  "actorSpecification": 1,
-  "name": "apify-hackathon",
-  "version": "0.1",
-  "title": "Apify Hackathon Actor",
-  "description": "Python-based Apify Actor using uv for package management",
-  "dockerfileFile": "Dockerfile",
-  "readme": "README.md",
-  "storages": {
-    "dataset": "./output/dataset",
-    "keyValueStore": "./output/key_value_store",
-    "requestQueue": "./output/request_queue"
-  },
-  "environmentVariables": {}
+	"actorSpecification": 1,
+	"name": "verihome",
+	"title": "Getting started with Python Crawlee and BeautifulSoup",
+	"description": "Scrapes titles of websites using Crawlee and BeautifulSoup.",
+	"version": "0.0",
+	"buildTag": "latest",
+	"meta": {
+		"templateId": "python-crawlee-beautifulsoup",
+		"generatedBy": "<FILL-IN-MODEL>"
+	},
+	"input": "./input_schema.json",
+	"output": "./output_schema.json",
+	"storages": {
+		"dataset": "./dataset_schema.json"
+	},
+	"dockerfile": "../Dockerfile"
 }

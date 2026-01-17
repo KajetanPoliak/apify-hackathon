@@ -1,36 +1,15 @@
 {
-  "title": "Actor Input",
-  "type": "object",
-  "schemaVersion": 1,
-  "properties": {
-    "startUrls": {
-      "title": "Start URLs",
-      "type": "array",
-      "editor": "requestListSources",
-      "description": "List of URLs to start crawling from",
-      "default": [
-        {
-          "url": "https://example.com"
+    "title": "Python Crawlee BeautifulSoup Scraper",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "start_urls": {
+            "title": "Start URLs",
+            "type": "array",
+            "description": "URLs to start with",
+            "prefill": [{ "url": "https://apify.com" }],
+            "editor": "requestListSources"
         }
-      ]
     },
-    "maxRequestsPerCrawl": {
-      "title": "Max Requests",
-      "type": "integer",
-      "description": "Maximum number of requests to process",
-      "default": 100,
-      "minimum": 1,
-      "maximum": 10000
-    },
-    "proxyConfiguration": {
-      "title": "Proxy Configuration",
-      "type": "object",
-      "editor": "proxy",
-      "description": "Proxy settings for the actor",
-      "default": {
-        "useApifyProxy": false
-      }
-    }
-  },
-  "required": []
+    "required": ["start_urls"]
 }

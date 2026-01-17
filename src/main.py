@@ -1,63 +1,67 @@
-"""
-Main entry point for the Apify Actor.
+"""Module defines the main entry point for the Apify Actor.
 
-This actor demonstrates the basic structure and usage of the Apify Python SDK.
+Feel free to modify this file to suit your specific needs.
+
+To build Apify Actors, utilize the Apify SDK toolkit, read more at the official documentation:
+https://docs.apify.com/sdk/python
 """
-import asyncio
+
+from __future__ import annotations
 
 from apify import Actor
+from crawlee.crawlers import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
 
 
 async def main() -> None:
-    """
-    Main function that runs the actor.
+    """Define a main entry point for the Apify Actor.
 
-    This function:
-    1. Initializes the Actor
-    2. Gets the input configuration
-    3. Processes the input
-    4. Stores results in the dataset
+    This coroutine is executed using `asyncio.run()`, so it must remain an asynchronous function for proper execution.
+    Asynchronous execution is required for communication with Apify platform, and it also enhances performance in
+    the field of web scraping significantly.
     """
+    # Enter the context of the Actor.
     async with Actor:
-        # Get the actor input
+        # Retrieve the Actor input, and use default values if not provided.
         actor_input = await Actor.get_input() or {}
+        start_urls = [
+            url.get('url')
+            for url in actor_input.get(
+                'start_urls',
+                [{'url': 'https://apify.com'}],
+            )
+        ]
 
-        # Extract configuration
-        start_urls = actor_input.get('startUrls', [])
-        max_requests = actor_input.get('maxRequestsPerCrawl', 100)
+        # Exit if no start URLs are provided.
+        if not start_urls:
+            Actor.log.info('No start URLs specified in Actor input, exiting...')
+            await Actor.exit()
 
-        # Set status message
-        await Actor.set_status_message(f'Starting actor with {len(start_urls)} start URLs')
+        # Create a crawler.
+        crawler = BeautifulSoupCrawler(
+            # Limit the crawl to max requests. Remove or increase it for crawling all links.
+            max_requests_per_crawl=10,
+        )
 
-        # Process start URLs
-        processed_count = 0
-        for url_item in start_urls:
-            if processed_count >= max_requests:
-                break
+        # Define a request handler, which will be called for every request.
+        @crawler.router.default_handler
+        async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
+            url = context.request.url
+            Actor.log.info(f'Scraping {url}...')
 
-            url = url_item.get('url') if isinstance(url_item, dict) else url_item
+            # Extract the desired data.
+            data = {
+                'url': context.request.url,
+                'title': context.soup.title.string if context.soup.title else None,
+                'h1s': [h1.text for h1 in context.soup.find_all('h1')],
+                'h2s': [h2.text for h2 in context.soup.find_all('h2')],
+                'h3s': [h3.text for h3 in context.soup.find_all('h3')],
+            }
 
-            # Example: Push data to dataset
-            await Actor.push_data({
-                'url': url,
-                'processed': True,
-                'message': f'Processed URL: {url}',
-            })
+            # Store the extracted data to the default dataset.
+            await context.push_data(data)
 
-            processed_count += 1
+            # Enqueue additional links found on the current page.
+            await context.enqueue_links()
 
-            # Update status
-            await Actor.set_status_message(f'Processed {processed_count}/{max_requests} requests')
-
-        # Store final result in key-value store
-        await Actor.set_value('OUTPUT', {
-            'totalProcessed': processed_count,
-            'status': 'SUCCEEDED',
-        })
-
-        # Exit successfully
-        await Actor.exit(exit_code=0, status_message='Successfully completed processing')
-
-
-if __name__ == '__main__':
-    asyncio.run(main())
+        # Run the crawler with the starting requests.
+        await crawler.run(start_urls)

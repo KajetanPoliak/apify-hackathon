@@ -5,6 +5,7 @@ description = "Python-based Apify Actor using uv for package management"
 requires-python = ">=3.10"
 dependencies = [
     "apify>=1.0.0",
+    "crawlee>=1.2.1",
 ]
 
 [project.optional-dependencies]

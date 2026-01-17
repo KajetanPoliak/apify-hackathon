@@ -1,145 +1,114 @@
-# Apify Hackathon Actor
+# Python Crawlee & BeautifulSoup Actor Template
 
-Python-based Apify Actor using `uv` for package management.
+<!-- This is an Apify template readme -->
 
-## Project Structure
+This template example was built with [Crawlee for Python](https://crawlee.dev/python) to scrape data from a website using [Beautiful Soup](https://pypi.org/project/beautifulsoup4/) wrapped into [BeautifulSoupCrawler](https://crawlee.dev/python/api/class/BeautifulSoupCrawler).
 
-```
-.
-├── .actor/
-│   ├── actor.json          # Actor configuration
-│   └── input_schema.json   # Input schema definition
-├── src/
-│   └── main.py            # Main actor entry point
-├── Dockerfile             # Docker container definition
-├── pyproject.toml         # Python project configuration (uv)
-├── uv.lock                # Locked dependencies
-├── .env.example           # Environment variables template
-└── README.md              # This file
-```
+## Quick Start
 
-## Prerequisites
-
-- Python 3.10 or higher
-- [uv](https://github.com/astral-sh/uv) package manager
-- [Apify CLI](https://docs.apify.com/cli) (for deployment)
-
-## Setup
-
-1. **Install uv** (if not already installed):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-2. **Install Python** (if needed):
-   ```bash
-   uv python install 3.12
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   uv sync
-   ```
-
-4. **Set up environment variables** (optional, for local development):
-   ```bash
-   # Copy the example file
-   cp .env.example .env
-   
-   # Edit .env and add your Apify API token
-   # Get your token from: https://console.apify.com/account/integrations
-   ```
-
-## Development
-
-### Run locally
+Once you've installed the dependencies, start the Actor:
 
 ```bash
-# Run the actor locally
 apify run
-
-# Run with specific input file
-apify run --input-file input.json
-
-# Run with clean storage
-apify run --purge
 ```
 
-### Using uv directly
+Once your Actor is ready, you can push it to the Apify Console:
 
 ```bash
-# Run the actor using uv
-uv run python src/main.py
+apify login # first, you need to log in if you haven't already done so
 
-# Install development dependencies
-uv sync --group dev
-```
-
-## Code Quality
-
-### Ruff - Fast Python Linter
-
-Ruff is configured to check code quality, import sorting, and common issues.
-
-```bash
-# Check code for issues
-uv run ruff check src/
-
-# Auto-fix issues (safe fixes)
-uv run ruff check --fix src/
-
-# Auto-fix issues (including unsafe fixes)
-uv run ruff check --fix --unsafe-fixes src/
-
-# Check specific file
-uv run ruff check src/main.py
-
-# Show all available rules
-uv run ruff rule --all
-```
-
-### Other Tools
-
-```bash
-# Run tests (when configured)
-uv run pytest
-
-# Format code
-uv run black src/
-
-# Type check
-uv run mypy src/
-```
-
-## Deployment
-
-```bash
-# Login to Apify
-apify login
-
-# Deploy to Apify platform
 apify push
 ```
 
-## Input Schema
+## Project Structure
 
-The actor accepts the following input parameters (defined in `.actor/input_schema.json`):
+```text
+.actor/
+├── actor.json # Actor config: name, version, env vars, runtime settings
+├── dataset_schena.json # Structure and representation of data produced by an Actor
+├── input_schema.json # Input validation & Console form definition
+└── output_schema.json # Specifies where an Actor stores its output
+src/
+└── main.py # Actor entry point and orchestrator
+storage/ # Local storage (mirrors Cloud during development)
+├── datasets/ # Output items (JSON objects)
+├── key_value_stores/ # Files, config, INPUT
+└── request_queues/ # Pending crawl requests
+Dockerfile # Container image definition
+```
 
-- `startUrls`: Array of URLs to start processing from
-- `maxRequestsPerCrawl`: Maximum number of requests to process (default: 100)
-- `proxyConfiguration`: Proxy settings for the actor
+For more information, see the [Actor definition](https://docs.apify.com/platform/actors/development/actor-definition) documentation.
 
-## Storage
+## How it works
 
-The actor uses Apify's storage systems:
+This code is a Python script that uses BeautifulSoup to scrape data from a website. It then stores the website titles in a dataset.
 
-- **Dataset**: For structured results (`Actor.pushData()`)
-- **Key-Value Store**: For configuration and final outputs (`Actor.setValue()` / `Actor.getValue()`)
-- **Request Queue**: For managing URLs to crawl (if using crawlers)
+- The crawler starts with URLs provided from the input `startUrls` field defined by the input schema. Number of scraped pages is limited by `maxPagesPerCrawl` field from the input schema.
+- The crawler uses `requestHandler` for each URL to extract the data from the page with the BeautifulSoup library and to save the title and URL of each page to the dataset. It also logs out each result that is being saved.
+
+## What's included
+
+- **[Apify SDK](https://docs.apify.com/sdk/python/)** - toolkit for building [Actors](https://apify.com/actors)
+- **[Crawlee for Python](https://crawlee.dev/python/)** - web scraping and browser automation library
+- **[Input schema](https://docs.apify.com/platform/actors/development/input-schema)** - define and easily validate a schema for your Actor's input
+- **[Dataset](https://docs.apify.com/sdk/python/docs/concepts/storages#working-with-datasets)** - store structured data where each object stored has the same attributes
+- **[Beautiful Soup](https://pypi.org/project/beautifulsoup4/)** - a library for pulling data out of HTML and XML files
+- **[Proxy configuration](https://docs.apify.com/platform/proxy)** - rotate IP addresses to prevent blocking
 
 ## Resources
 
-- [Apify Python SDK Documentation](https://docs.apify.com/sdk/python/)
-- [Apify Actors Documentation](https://docs.apify.com/actors)
-- [uv Documentation](https://github.com/astral-sh/uv)
-- [Agents.md](./Agents.md) - Development guidelines
+- [Quick Start](https://docs.apify.com/platform/actors/development/quick-start) guide for building your first Actor
+- [Video introduction to Python SDK](https://www.youtube.com/watch?v=C8DmvJQS3jk)
+- [Webinar introducing to Crawlee for Python](https://www.youtube.com/live/ip8Ii0eLfRY)
+- [Apify Python SDK documentation](https://docs.apify.com/sdk/python/)
+- [Crawlee for Python documentation](https://crawlee.dev/python/docs/quick-start)
+- [Python tutorials in Academy](https://docs.apify.com/academy/python)
+- [Integration with Zapier](https://apify.com/integrations), Make, Google Drive and others
+- [Video guide on getting data using Apify API](https://www.youtube.com/watch?v=ViYYDHSBAKM)
+
+## Creating Actors with templates
+
+[How to create Apify Actors with web scraping code templates](https://www.youtube.com/watch?v=u-i-Korzf8w)
+
+
+## Getting started
+
+For complete information [see this article](https://docs.apify.com/platform/actors/development#build-actor-locally). To run the Actor use the following command:
+
+```bash
+apify run
+```
+
+## Deploy to Apify
+
+### Connect Git repository to Apify
+
+If you've created a Git repository for the project, you can easily connect to Apify:
+
+1. Go to [Actor creation page](https://console.apify.com/actors/new)
+2. Click on **Link Git Repository** button
+
+### Push project on your local machine to Apify
+
+You can also deploy the project on your local machine to Apify without the need for the Git repository.
+
+1. Log in to Apify. You will need to provide your [Apify API Token](https://console.apify.com/account/integrations) to complete this action.
+
+    ```bash
+    apify login
+    ```
+
+2. Deploy your Actor. This command will deploy and build the Actor on the Apify Platform. You can find your newly created Actor under [Actors -> My Actors](https://console.apify.com/actors?tab=my).
+
+    ```bash
+    apify push
+    ```
+
+## Documentation reference
+
+To learn more about Apify and Actors, take a look at the following resources:
+
+- [Apify SDK for JavaScript documentation](https://docs.apify.com/sdk/js)
+- [Apify SDK for Python documentation](https://docs.apify.com/sdk/python)
+- [Apify Platform documentation](https://docs.apify.com/platform)
+- [Join our developer community on Discord](https://discord.com/invite/jyEM2PRvMU)
